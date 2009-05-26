@@ -30,7 +30,9 @@ def read_interval_alignment(ofile, srcDB, destDB, al=None, **kwargs):
         import cnestedlist
         al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True)
         needToBuild = True
-    p = BlastHitParser()
+        
+    blast_filter_fn = kwargs.get('blast_filter_fn')
+    p = BlastHitParser(blast_filter_fn)
     al.add_aligned_intervals(p.parse_file(ofile), srcDB, destDB,
                              alignedIvalsAttrs=
                              dict(id='src_id', start='src_start',
@@ -422,7 +424,8 @@ def blastx_results(ofile, srcDB, destDB, xformSrc=True, xformDest=False,
     Each hit is stored as the usual NLMSASlice interface (e.g.
     use its edges() method to get src,dest,edgeInfo tuples'''
     import cnestedlist
-    p = BlastHitParser()
+    blast_filter_fn = kwargs.get('blast_filter_fn')
+    p = BlastHitParser(blast_filter_fn)
     alignedIvals = read_aligned_coords(p.parse_file(ofile), srcDB, destDB,
                                        dict(id='src_id', start='src_start',
                                             stop='src_end', ori='src_ori',

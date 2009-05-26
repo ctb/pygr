@@ -36,10 +36,11 @@ class BlastHitParser(object):
     Method parse_file(fo) reads file object fo, and generates tuples
     suitable for BlastIval."""
     gapchar='-'
-    def __init__(self):
+    def __init__(self, filter_fn=None):
         self.hit_id=0
         self.nline = 0
         self.reset()
+        self.filter_fn = filter_fn
     def reset(self):
         "flush any alignment info, so we can start reading new alignment"
         self.query_seq=""
@@ -171,10 +172,13 @@ class BlastHitParser(object):
                (is_line_start('>',line) or is_line_start(' Score =',line) \
                 or is_line_start('  Database:',line) \
                 or is_line_start('Query=',line)):
-                yield CoordsGroupStart() # bracket with grouping markers
-                for t in self.generate_intervals(): # REPORT THIS ALIGNMENT
-                    yield t # GENERATE ALL ITS INTERVAL MATCHES
-                yield CoordsGroupEnd()
+                if self.filter_fn and not self.filter_fn(self):
+                    pass
+                else:
+                    yield CoordsGroupStart() # bracket with grouping markers
+                    for t in self.generate_intervals(): # REPORT THIS ALIGNMENT
+                        yield t # GENERATE ALL ITS INTERVAL MATCHES
+                    yield CoordsGroupEnd()
                 self.reset() # RESET TO START A NEW ALIGNMENT
             if is_line_start('Query=',line):
                 self.save_query(line)
