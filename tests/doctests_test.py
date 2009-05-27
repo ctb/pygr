@@ -18,6 +18,7 @@ def get_suite():
     suite = unittest.TestSuite()
     
     names = [
+        ['tutorials', 'alignment.rst'],
 #        'contents.rst',
 #        'sequences.rst',
 #        'contrib%sfetch.rst' % os.path.sep,   @CTB does not work on my system?
@@ -27,9 +28,12 @@ def get_suite():
 
     # needs relative paths for some reason
     doctestpath = os.path.join('..', 'doc', 'rest')
+    names = [ os.path.join(*name) for name in names ]
     paths = [ os.path.join(doctestpath, name) for name in names ]
 
+    print paths
     for path in paths:
+        print path
         docsuite = doctest.DocFileSuite(path)
         suite.addTest(docsuite)
 
