@@ -394,6 +394,11 @@ class SequenceFileDB(SequenceDB):
     custom reader; see 'reader' kw arg, and the _store_seqlen_dict
     function).
 
+    The autoGC, itemClass, and itemSliceClass keyword args are passed
+    through to the SequenceDB parent class.  Any additional keyword
+    args are also passed through to to classutil.get_bound_subclass
+    as subclassArgs.
+
     The SequenceFileDB seqInfoDict interface is a wrapper around the
     seqLenDict created by the __init__ function.
 
@@ -599,7 +604,7 @@ You can get that using its \'sequence\' attribute.''')
 class _PrefixUnionMemberDict(object, UserDict.DictMixin):
     """
     @CTB confusing/inappropriate use of a dict interface! keep??
-    @CTB document.
+    @CTB either remove _, or remove from seqdb documentation.
     'd[prefix]=value; d[k] returns value if k is a member of prefix'
     """
     def __init__(self, puDict, default=None,
@@ -787,7 +792,10 @@ cannot create with prefixDict and filename both!''')
                 yield self.format_id(p, id), seq
 
     def getName(self, ival):
-        """For a given sequence, return a fully qualified name, 'prefix.id'."""
+        """For a given sequence, return a fully qualified name, 'prefix.id'.
+
+        Deprecated.
+        """
         seq = ival.pathForward # get the top-level sequence object
         return self.dicts[seq.db] + self.separator + seq.id
 

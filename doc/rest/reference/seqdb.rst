@@ -30,7 +30,7 @@ This class was renamed from "BlastDB" in Pygr 0.8.
 
 Options for constructing a SequenceFileDB:
 
-.. class:: SequenceFileDB(filepath=None, itemClass=FileDBSequence, itemSliceClass=None, reader=None, autoGC=True, ifile=None, **kwargs)
+.. class:: SequenceFileDB(filepath=None, itemClass=FileDBSequence, itemSliceClass=None, reader=None, autoGC=True, **kwargs)
 
    Open a sequence file as a "database" object, giving the user access
    to its sequences.
@@ -64,12 +64,6 @@ Options for constructing a SequenceFileDB:
      when you drop all references to a given sequence object, SequenceFileDB
      also flushes it from its cache.  This is implemented using a Python
      WeakValueDictionary.
-
-   * *ifile* lets you open the database directly from a file object rather
-     than a filename.  If you have a file object, you can pass it directly to
-     SequenceFileDB instead of a filepath.  NB: the SequenceFileDB()
-     constructor will close *ifile* when it is done reading from
-     the file object.
 
 
 Useful methods:
@@ -121,26 +115,23 @@ set of multiple databases::
 
    hg17 = BlastDB('/usr/tmp/ucsc_msa/hg17')
    mm5 = BlastDB('/usr/tmp/ucsc_msa/mm5')
-   ... # LOAD A BUNCH OF OTHER GENOMES TOO...
-   genomes = {'hg17':hg17,'mm5':mm5, 'rn3':rn3, 'canFam1':cf1, 'danRer1':dr1,
-   'fr1':fr1, 'galGal2':gg2, 'panTro1':pt1} # PREFIX DICTIONARY FOR THE UNION
-   					 # OF ALL OUR GENOMES
-   genomeUnion = PrefixUnionDict(genomes)
-   ptChr7 = genomeUnion['panTro1.chr7'] # GET CHIMP CHROMOSOME 7
 
-   if 'panTro1.chr5' in genomeUnion: # CHECK IF THIS ID IN OUR UNION
-       pass # DO SOMETHING...
+   genomeUnion = PrefixUnionDict({ 'mm5': mm5, 'hg17', hg17 })
 
-   s = -(ptChr7[1000:2000]) # GET A BIT OF THIS SEQUENCE
-   if s in genomeUnion: # THIS IS HOW TO CHECK IF s DERIVED FROM OUR UNION
-       pass # DO SOMETHING...
+   # retrieve a mouse chr
+   mouse_chr3 = genomeUnion['mm5.chr3']
+   
+   # retrieve a human chr
+   human_chr2 = genomeUnion['hg17.chr2']
 
+   # check to see if sequence ival is in genomeUnion:
+   if human_chr2[5000:6000] in genomeUnion: ...
 
 It provides a :meth:`__contains__` method that tests whether
 a given sequence object is derived from the :class:`PrefixUnionDict`
 (see example above).  Here are some additional methods:
 
-.. class:: PrefixUnionDict(prefixDict=None, separator='.', filename=None, dbClass=BlastDB)
+.. class:: PrefixUnionDict(prefixDict=None, separator='.', filename=None, dbClass=SequenceFileDB, trypath=None)
 
    You can create a :class:`PrefixUnionDict` either using
    a *prefixDict* (whose keys are string prefixes, and whose
@@ -150,49 +141,29 @@ a given sequence object is derived from the :class:`PrefixUnionDict`
    automatically open all the sequence databases for you.
    When opening from a header file, you can also specify a
    *dbClass* to be used for opening individual sequence databases
-   listed in the header file; the default is :class:`BlastDB`.
+   listed in the header file; the default is :class:`SequenceFileDB`.
    The database class constructor must take a single argument,
    which is the filepath for opening the database.  The
    *separator* character is used to form "prefix.suffix"
-   identifiers.
+   identifiers.  *trypath* is a list of paths to search for
+   sequence dbs to open.
 
 
 .. method:: __invert__()
 
-   The invert operator (\textasciitilde, the "tilde" character)
-   enables reverse-mapping of sequence objects to their string ID.
-   This is the recommended way to get the "fully qualified sequence ID", i.e. with
-   the appropriate prefix prepended::
+   The invert operator (~, the "tilde" character) enables
+   reverse-mapping of sequence objects to their string ID, that is,
+   for a given sequence object *seq* derived from the union (or a
+   slice of a sequence from the union), return a string identifier in
+   the form of "foo.bar".
 
-      id = (~db)[seq] # GET PROPERLY PREFIXED-IDENTIFIER FOR THIS SEQUENCE
+   This is the recommended way to get the "fully qualified sequence
+   ID", i.e. with the appropriate prefix prepended::
 
-   For a given sequence object *seq* derived from the union
-   (or a slice of a sequence from the union), return a string identifier
-   in the form of "foo.bar".
+      id = (~db)[seq]
+      # e.g. 'hg17.chr3'
 
-
-.. method:: getName(path)
-
-   This method is deprecated; instead use the :meth:`__invert__` operator
-   above.
-
-
-.. method:: writeHeaderFile(filename)
-
-   THIS METHOD IS DEPRECATED, because it is restricted to
-   assuming that all sequence dictionaries it contains
-   are of a single class.  We recommend that you instead save
-   it to pygr.Data, or pickle it directly using pygr.Data.dumps().
-
-   Save a header file for this union, to reopen later.
-   It saves the separator character, and a list of prefixes
-   and filepaths to the various sequence databases (which
-   must have a :attr:`filepath` attribute).  This header
-   file can be used for later reopening the prefix-union
-   in a single step.
-
-
-.. method:: newMemberDict()
+.. method:: newMemberDict(**kwargs)
 
    Returns a new member dictionary for testing membership in
    the distinct prefix groups.  See :class:`PrefixUnionMemberDict`.
@@ -215,11 +186,28 @@ a given sequence object is derived from the :class:`PrefixUnionDict`
    their :meth:`cacheHint` method, without itself doing anything
    to cache the information.
 
+.. method:: getName(path)
+
+   **This method is deprecated;** instead use the :meth:`__invert__` operator
+   above.
 
 
+.. method:: writeHeaderFile(filename)
 
-PrefixUnionMemberDict
----------------------
+   **This method is deprecated,** because it is restricted to assuming
+   that all sequence dictionaries it contains are of a single class.
+   We recommend that you instead save it to pygr.Data, or pickle it
+   directly using pygr.Data.dumps().
+
+   Save a header file for this union, to reopen later.  It saves the
+   separator character, and a list of prefixes and filepaths to the
+   various sequence databases (which must have a :attr:`filepath`
+   attribute).  This header file can be used for later reopening the
+   prefix-union in a single step.
+
+
+_PrefixUnionMemberDict
+----------------------
 Implements membership testing on distinct prefix groups.  Specifically,
 you can bind a given prefix to a value::
 
@@ -231,7 +219,7 @@ prefix groups in the dictionary::
    v = d[k] # raises KeyError if k not a member of 'prefix1' or other prefix group in d
 
 
-.. class:: PrefixUnionMemberDict(puDict,default=None,attrMethod=lambda x:x.pathForward.db)
+.. class:: _PrefixUnionMemberDict(puDict,default=None,attrMethod=lambda x:x.pathForward.db)
 
    * *puDict* must be a :class:`PrefixUnionDict`, whose prefix groups constitute the
      allowed possible key groups for this membership dictionary.  *default*
@@ -256,6 +244,7 @@ prefix groups in the dictionary::
 PrefixDictInverse
 -----------------
 Provides the interface to the inverse mapping of the :class:`PrefixUnionDict`.
+
 .. method:: __getitem__(k)
 
    Returns the fully-qualified string ID for sequence object *k*.
@@ -352,79 +341,3 @@ XMLRPC (from the the :class:`BlastDBXMLRPC` acting as the server).
 Currently, this class provides sequence access.  You can work with sequences
 exactly as you would with a :class:`BlastDB`, but cannot perform actual BLAST searches
 (i.e. the :meth:`blast` and :meth:`megablast` methods don't work over XMLRPC).
-
-VirtualSeq
-----------
-This class provides an empty sequence object that
-acts purely as a reference system.
-Automatically elongates if slice extends beyond current stop.
-This class avoids setting the *stop* attribute, taking advantage
-of SeqPath's mechanism for allowing a sequence to grow in length::
-
-   s = VirtualSeq('FOOG_HUMAN')
-   len(s) # ONLY 1 LETTER LONG BY DEFAULT
-   s1 = s[100:215] # GET A SLICE OF THIS SEQUENCE
-   len(s) # NOW IT'S 215
-
-
-The associated VirtualSeqDB class provides a "sequence database"
-that returns a VirtualSeq object for every identifier requested of
-it.  It acts like a Python dictionary::
-
-   db = VirtualSeqDB()
-   s = db['FOOG_HUMAN'] # ASK FOR A SEQUENCE BY ITS IDENTIFIER
-   s1 = s[100:215] # GET A SLICE OF THIS SEQUENCE
-
-For a given identifier it always returns the same VirtualSeq
-object (i.e. the object returned from the first request for that identifier).
-In other words, if the identifier was previously requested,
-it returns the VirtualSeq for that identifier; if not, it
-creates a new one.
-This can be convenient when performing operations that just
-need a coordinate reference system, not actual sequence.
-
-
-
-
-SliceDB
--------
-For most applications, :class:`AnnotationDB` is a better choice than
-this older class.
-This class enables you to apply "slicing information" from
-one database to sequences from a second database.  For example,
-you could have a database that lists genes as intervals (slices)
-on genomic sequences stored in a BlastDB database.  The only
-requirements are:
-
-* *slice database*: must accept a string identifier as a key,
-  and return a slice information object as a value.
-  
-* *slice information*: a slice information object must
-  have the following attributes: :attr:`name` gives the identifier
-  of the sequence containing the slice; :attr:`start` and :attr:`stop`
-  give the coordinates of the sequence interval (which should be positive
-  integers following standard
-  Python slice coordinate conventions); :attr:`ori` gives the sequence
-  orientation as an integer (1 for positive orientation, -1 for
-  negative orientation).
-  
-* *sequence database*: must accept a string identifier as a key,
-  and return a sliceable sequence object as a value.
-  
-
-
-Both databases should raise :exc:`KeyError` for bad identifiers.
-The current :class:`SliceDB` implementation caches sequence objects so
-that subsequent calls for the same identifier will not require
-repeating the database queries to the two databases.  To
-remove a sequence object from the cache, just use
-``del db[id]`` as usual.
-
-SliceDB inherits from the builtin Python :class:`dict` class,
-so all standard methods can be used::
-
-   db = SliceDB(sliceDB,seqDB) # CREATE OUR DATABASE
-   gene = db[cluster_id] # USE IT TO GET A GENE SEQUENCE...
-
-
-
