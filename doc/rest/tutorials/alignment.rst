@@ -80,6 +80,72 @@ the aligned sequence, treating it as a mapping:
 Gaps
 ^^^^
 
+The alignments above deal with *ungapped* blocks of sequence similarity.
+How does pygr deal with gapped alignments?
+
+Let's start by loading in some carefully constructed sequences:
+
+   >>> db = seqdb.SequenceFileDB('data/gapping.fa')
+   >>> ungapped = db['ungapped']
+   >>> gapped = db['gapped']
+
+Here, 'gapped' is a copy of 'ungapped' with 4 extra nucleotides
+('atgc') inserted into it at position 40:
+
+   >>> print ungapped
+   ATGGTGCACCTGACTGATGCTGAGAAGGCTGCTGTCTCTGGCCTGTGGGGAAAGGTGAACTCCGATGAAG
+   >>> print gapped
+   ATGGTGCACCTGACTGATGCTGAGAAGGCTGCTGTCTCTGatgcGCCTGTGGGGAAAGGTGAACTCCGATGAAG
+
+Now, let's build an alignment containing the two ungapped blocks:
+   
+   >>> al = cnestedlist.NLMSA('hbb', mode='memory')
+   >>> al += gapped
+   >>> first_ival = gapped[:40]
+   >>> second_ival = gapped[44:]
+   >>> al[first_ival] += ungapped[:40]
+   >>> al[second_ival] += ungapped[40:]
+   >>> al.build()
+
+As you'd expect, querying 'al' with either 'ungapped' or 'gapped' returns
+two elements with 100% identity:
+
+   >>> for (src, dest, edge) in al[gapped].edges():
+   ...   print repr(src), repr(dest), '%.2f' % (edge.pIdentity(),)
+   gapped[0:40] ungapped[0:40] 1.00
+   gapped[44:74] ungapped[40:70] 1.00
+
+   >>> for (src, dest, edge) in al[ungapped].edges():
+   ...   print repr(src), repr(dest), '%.2f' % (edge.pIdentity(),)
+   ungapped[0:40] gapped[0:40] 1.00
+   ungapped[40:70] gapped[44:74] 1.00
+
+Is there a way to combine these into a single interval?  Yes!  This
+is where the extra arguments to the ``keys()``, ``values()``, and ``edges()``
+methods on ``NLMSASlice`` come in handy.
+
+For example, to bridge insertions in the query sequence (or, equivalently,
+deletions in the target sequence), set 'maxgap':
+
+   >>> for (src, dest, edge) in al[gapped].edges(maxgap=4):
+   ...   print repr(src), repr(dest), '%.3f' % (edge.pIdentity(),)
+   gapped[0:74] ungapped[0:70] 0.946
+
+To bridge deletions in the query sequence (insertions in the target
+sequence) use the 'maxinsert' parameter:
+
+   >>> for (src, dest, edge) in al[ungapped].edges(maxinsert=4):
+   ...   print repr(src), repr(dest), '%.3f' % (edge.pIdentity(),)
+   ungapped[0:70] gapped[0:74] 0.946
+
+For both of these queries, you can see that the percent identity is
+properly adjusted to reflect the identity of only 70 of the 74
+nucleotides (70/74 = 94.6%)
+
+There are a number of other ways to control how ``NLMSASlice`` queries
+work, including minimum identity filters, minimum aligned block sizes,
+etc.
+
 Storing alignments on disk
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -155,8 +221,97 @@ dictionaries.
 Creating alignments with BLAST
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Using the "translated BLASTs" (blastx, tblastn, tblastx)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   >>> from pygr import blast
+   >>> db = seqdb.SequenceFileDB('data/gapping.fa')
+   >>> blastmap = blast.BlastMapping(db)
+
+   >>> ungapped = db['ungapped']
+   >>> gapped = db['gapped']
+
+Now, let's use BLAST to search the sequence
+
+   >>> edges = blastmap[gapped].edges()
+
+   >>> for (src, dest, edge) in edges:
+   ...   print repr(src), 'matches', repr(dest)
+   gapped[0:40] matches ungapped[0:40]
+   gapped[44:74] matches ungapped[40:70]
+
+Yep, it's that easy!
+
+Note that 'blastmap' will, by default, ignore self-matches:
+there are no 'gapped' to 'gapped' matches above, even though
+'gapped' is present in the database being searched.
+
+You can also search the entire database against itself:
+
+   >>> al = blastmap(None, queryDB=db)
+   >>> for seq in db.values():
+   ...    for (src, dest, edge) in al[seq].edges():
+   ...       print repr(src), repr(dest)
+   gapped[0:40] ungapped[0:40]
+   gapped[0:40] ungapped[0:40]
+   gapped[44:74] ungapped[40:70]
+   gapped[44:74] ungapped[40:70]
+   ungapped[0:40] gapped[0:40]
+   ungapped[0:40] gapped[0:40]
+   ungapped[40:70] gapped[44:74]
+   ungapped[40:70] gapped[44:74]
+
+Note that you get duplicate matches here because both the
+gapped-to-ungapped and ungapped-to-gapped matches are entered into the
+alignment; because BLAST is not a symmetric algorithm, these may
+result in different alignments.
+
+Using the "translated BLASTs" (blastx and tblastx)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``BlastMapping`` objects can't handle the translated BLASTs because
+they don't return coordinates in the same sequence space as the query
+sequences.  So, we have to use ``BlastxMapping instead``.
+
+For example, suppose you want to search a protein database ('sp_all_hbb')
+
+   >>> dna_db = seqdb.SequenceFileDB('data/hbb1_mouse.fa')
+   >>> dna_seq = dna_db['gi|171854975|dbj|AB364477.1|']
+   >>> prot_db = seqdb.SequenceFileDB('data/sp_all_hbb')
+
+Construct and query the ``BlastxMapping`` object as you would a
+``BlastMapping`` object...
+
+   >>> map = blast.BlastxMapping(prot_db)
+   >>> results = map[dna_seq]
+
+but the results are a *list of ``NLMSASlice`` objects* rather than an
+NLMSA, and the source intervals are *amino acid translations* of the
+sequence we searched with:
+
+   >>> rat_prot = prot_db['HBB2_RAT']
+   >>> rat_prot_matches = []
+   >>> for match in results:
+   ...   if rat_prot in match:
+   ...      for (src, dest, edge) in match.edges():
+   ...         print repr(src), repr(dest)
+   ...         print src[:20]
+   ...         print dest[:20]
+   annot3[0:146] HBB2_RAT[0:146]
+   VHLTDAEKAAVSGLWGKVNS
+   VHLTDAEKATVSGLWGKVNA
+
+How can we get the original sequence?  Easy -- dereference the
+annotation object into its source DNA sequence:
+
+   >>> rat_prot = prot_db['HBB2_RAT']
+   >>> rat_prot_matches = []
+   >>> for match in results:
+   ...   if rat_prot in match:
+   ...      for (src, dest, edge) in match.edges():
+   ...         print repr(src.sequence), repr(dest)
+   ...         print src.sequence[:30]
+   ...         print '  '.join(str(dest[:10]))
+   gi|171854975|dbj|AB364477.1|[3:441] HBB2_RAT[0:146]
+   GTGCACCTGACTGATGCTGAGAAGGCTGCT
+   V  H  L  T  D  A  E  K  A  T
 
 Building an Alignment Database from MAF files
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
