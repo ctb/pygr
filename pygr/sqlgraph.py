@@ -85,6 +85,9 @@ def init_row_subclass(cls, db):
         else: # treat as interface to our stored tuple
             setattr(cls, attr, cls._columnDescriptor(db, attr))
 
+def dir_row(self):
+    """get list of column names as our attributes """
+    return self.db.data.keys()
 
 class TupleO(object):
     """Provides attribute interface to a database tuple.
@@ -111,6 +114,7 @@ class TupleO(object):
     _sqlDescriptor = SQLDescriptor
     _init_subclass = classmethod(init_row_subclass)
     _select = select_from_row
+    __dir__ = dir_row
     def __init__(self, data):
         self._data = data # save our data tuple
 
@@ -194,6 +198,7 @@ class SQLRow(object):
     _idDescriptor = ReadOnlyDescriptor
     _init_subclass = classmethod(init_row_subclass)
     _select = select_from_row
+    __dir__ = dir_row
     def __init__(self, rowID):
         self._id = rowID
 
@@ -486,7 +491,7 @@ class SQLTableBase(object, UserDict.DictMixin):
                         writeable=0)
     __getstate__ = standard_getstate
     def __setstate__(self,state):
-        # default cursor provisioning by pygr.Data is deprecated!
+        # default cursor provisioning by worldbase is deprecated!
         ## if 'serverInfo' not in state: # hmm, no address for db server?
         ##     try: # SEE IF WE CAN GET CURSOR DIRECTLY FROM RESOURCE DATABASE
         ##         from Data import getResource

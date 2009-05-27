@@ -171,9 +171,10 @@ class BlastMapping(object):
             return self.blastIndexPath
         except AttributeError:
             return self.filepath
-    # DEFAULT: BUILD INDEX FILES IN self.filepath . HOME OR /tmp 
+    # DEFAULT: BUILD INDEX FILES IN self.filepath . HOME OR APPROPRIATE
+    # USER-/SYSTEM-SPECIFIC TEMPORARY DIRECTORY
     blastIndexDirs = ['FILEPATH',os.getcwd,os.path.expanduser,
-                      classutil.default_tmp_path]
+                      tempfile.gettempdir()]
     def blast_index_paths(self):
         'iterate over possible blast index directories'
         try: # 1ST TRY ACTUAL SAVED LOCATION IF ANY
@@ -416,37 +417,32 @@ def generate_tblastn_ivals(alignedIvals, xformSrc=False, xformDest=True,
             destIvals.append(t[1])
 
 
-class BlastxResults(object):
-    '''holds blastx or tblastx results.  Iterate over it to get hits one by one
-    Each hit is returned as the usual NLMSASlice interface (e.g.
+def blastx_results(ofile, srcDB, destDB, xformSrc=True, xformDest=False,
+                   **kwargs):
+    '''store blastx or tblastx results as a list of individual hits.
+    Each hit is stored as the usual NLMSASlice interface (e.g.
     use its edges() method to get src,dest,edgeInfo tuples'''
-    def __init__(self, ofile, srcDB, destDB, xformSrc=True, xformDest=False,
-                 **kwargs):
-        import cnestedlist
-        p = BlastHitParser()
-        alignedIvals = read_aligned_coords(p.parse_file(ofile), srcDB, destDB,
-                                           dict(id='src_id', start='src_start',
-                                                stop='src_end', ori='src_ori',
-                                                idDest='dest_id',
-                                                startDest='dest_start',
-                                                stopDest='dest_end',
-                                                oriDest='dest_ori'))
-        l = []
-        for t in generate_tblastn_ivals(alignedIvals, xformSrc, xformDest):
-            if isinstance(t, CoordsGroupStart):
-                al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True)
-            elif isinstance(t, CoordsGroupEnd): # process all ivals in this hit
-                al.build()
-                l.append(al[queryORF]) # save NLMSASlice view of this hit
-            else: # just keep accumulating all the ivals for this hit
-                al += t[0]
-                al[t[0]][t[1]] = None # save their alignment
-                queryORF = t[0].path
-        self.hits = l
-    def __iter__(self):
-        return iter(self.hits)
-    def __len__(self):
-        return len(self.hits)
+    import cnestedlist
+    p = BlastHitParser()
+    alignedIvals = read_aligned_coords(p.parse_file(ofile), srcDB, destDB,
+                                       dict(id='src_id', start='src_start',
+                                            stop='src_end', ori='src_ori',
+                                            idDest='dest_id',
+                                            startDest='dest_start',
+                                            stopDest='dest_end',
+                                            oriDest='dest_ori'))
+    l = []
+    for t in generate_tblastn_ivals(alignedIvals, xformSrc, xformDest):
+        if isinstance(t, CoordsGroupStart):
+            al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True)
+        elif isinstance(t, CoordsGroupEnd): # process all ivals in this hit
+            al.build()
+            l.append(al[queryORF]) # save NLMSASlice view of this hit
+        else: # just keep accumulating all the ivals for this hit
+            al += t[0]
+            al[t[0]][t[1]] = None # save their alignment
+            queryORF = t[0].path
+    return l
 
 class BlastxMapping(BlastMapping):
     '''use this mapping class for blastx or tblastx queries.
@@ -456,9 +452,7 @@ class BlastxMapping(BlastMapping):
     consolidates all the hits into a single alignment object).
     BlastxMapping does this because blastx may find multiple ORFs
     in the query sequence; due to this complication it is simplest
-    to simply return the hits one at a time exactly as blastx reports them.
-    Running a query on this class returns a BlastxResults object
-    which provides an interface to iterate through the hits one by one.'''
+    to simply return the hits one at a time exactly as blastx reports them.'''
     def __call__(self, seq, blastpath='blastall',
                  blastprog=None, expmax=0.001, maxseq=None, verbose=None,
                  opts='', xformSrc=True, xformDest=False, **kwargs):
@@ -474,8 +468,7 @@ class BlastxMapping(BlastMapping):
             raise ValueError('Use BlastMapping for ' + blastprog)
         cmd = self.blast_command(blastpath, blastprog, expmax, maxseq, opts)
         seqID,p = start_blast(cmd, seq) # run the command
-        results = BlastxResults(p.stdout, {seqID:seq}, self.idIndex, xformSrc,
-                                xformDest, **kwargs) # save the results
-        return results
+        return blastx_results(p.stdout, {seqID:seq}, self.idIndex, xformSrc,
+                              xformDest, **kwargs) # save the results
     def __getitem__(self, k):
         return self(k)

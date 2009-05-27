@@ -812,7 +812,7 @@ cannot create with prefixDict and filename both!''')
                 print >>ifile, '%s\t%s' % (k, v.filepath)
             except AttributeError:
                 raise AttributeError('''\
-seq db '%s' has no filepath; you may be able to save this to pygr.Data,
+seq db '%s' has no filepath; you may be able to save this to worldbase,
 but not to a text HeaderFile!''' % k)
         ifile.close()
 
@@ -1128,26 +1128,4 @@ class XMLRPCSequenceDB(SequenceDB):
             self._seqtype = self.server.get_seqtype()
             return self._seqtype
 
-###
-
-def fastaDB_unpickler(klass,srcfile,kwargs):  # @CTB untested
-    if klass is BlastDB or klass == 'BlastDB':
-        klass = BlastDB
-    else:
-        raise ValueError('Caught attempt to unpickle untrusted class %s' %klass)
-    o = klass(srcfile,**kwargs) # INITIALIZE, BUILD INDEXES, ETC.
-    o._saveLocalBuild = True # MARK FOR LOCAL PYGR.DATA SAVE
-    return o
-fastaDB_unpickler.__safe_for_unpickling__ = 1
-class FastaDB(object):
-    'unpickling this object will attempt to construct BlastDB from filepath'
-    _pygr_data_no_cache = True # do not cache this object; it is not ready to use!!
-    def __init__(self,filepath,klass=BlastDB,**kwargs):
-        self.filepath = filepath
-        self.klass = klass
-        self.kwargs = kwargs
-    def __reduce__(self):
-        return (fastaDB_unpickler,(self.klass,self.filepath,self.kwargs))
-
-####
 

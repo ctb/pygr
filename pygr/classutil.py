@@ -173,7 +173,7 @@ since it would be unable to find the file using the relative path.
 To avoid this problem, SourceFileName is saving the current
 working directory path so that it can translate the relative
 path to an absolute path.  In the future, please use absolute
-paths when constructing objects that you intend to save to pygr.Data
+paths when constructing objects that you intend to save to worldbase
 or pickle!''' % str(self)
         return (filename_unpickler,(self.__class__,str(self),
                                     dict(curdir=os.getcwd())))
@@ -205,13 +205,6 @@ def search_dirs_for_file(filepath, pathlist=()):
             return mypath
     raise IOError('unable to open %s from any location in %s'
                   %(filepath,pathlist))
-
-def default_tmp_path():
-    'find out default location for temp files, e.g. /tmp'
-    for tmp in ['/tmp','/usr/tmp']: # RETURN THE 1ST WRITABLE LOCATION
-        if os.access(tmp,os.W_OK):
-            return tmp
-    return os.path.dirname(os.tempnam()) # GRR. ASK PYTHON WHERE tmp IS...
 
 def report_exception():
     'print string message from exception to stderr'
@@ -352,7 +345,7 @@ def get_bound_subclass(obj, classattr='__class__', subname=None, factories=(),
         pass
     else: # someone else's shadow class, so shadow its parent
         targetClass = targetClass._shadowParent
-    if subname is None: # get a name from pygr.Data ID
+    if subname is None: # get a name from worldbase ID
         subname = obj._persistent_id.split('.')[-1]
     class shadowClass(targetClass):
         __reduce__ = shadow_reducer

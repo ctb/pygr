@@ -1,11 +1,15 @@
 
-from pygr import worldbase,worldbaseSchema
-from metabase import ResourceServer, dumps, OneToManyRelation, OneToOneRelation,\
-     ManyToManyRelation, PygrDataNotPortableError, PygrDataNotFoundError, \
-     PygrDataMismatchError, PygrDataEmptyError, PygrDataReadOnlyError, \
-     PygrDataSchemaError, PygrDataNoModuleError, ResourceZone
+import warnings
+warnings.warn('pygr.Data is deprecated.  Use "from pygr import worldbase" instead!',
+              DeprecationWarning, stacklevel=2)
 
-schema = worldbaseSchema # ROOT OF OUR SCHEMA NAMESPACE
+from pygr import worldbase
+from metabase import ResourceServer, dumps, OneToManyRelation, OneToOneRelation,\
+     ManyToManyRelation, WorldbaseNotPortableError, WorldbaseNotFoundError, \
+     WorldbaseMismatchError, WorldbaseEmptyError, WorldbaseReadOnlyError, \
+     WorldbaseSchemaError, WorldbaseNoModuleError, ResourceZone
+
+schema = worldbase.schema # ROOT OF OUR SCHEMA NAMESPACE
 
 # PROVIDE TOP-LEVEL NAMES IN OUR RESOURCE HIERARCHY
 Bio = worldbase.Bio
@@ -45,9 +49,9 @@ __all__ = ('Bio', 'schema', 'getResource', 'addResource', 'addSchema',
            'deleteResource', 'dir', 'newServer', 'save', 'rollback',
            'list_pending', 'loads', 'dumps', 'update', 'clear_cache',
            'OneToManyRelation', 'ManyToManyRelation',
-           'OneToOneRelation', 'PygrDataNotPortableError',
-           'PygrDataNotFoundError', 'PygrDataMismatchError',
-           'PygrDataEmptyError', 'PygrDataReadOnlyError',
-           'PygrDataSchemaError', 'PygrDataNoModuleError',
+           'OneToOneRelation', 'WorldbaseNotPortableError',
+           'WorldbaseNotFoundError', 'WorldbaseMismatchError',
+           'WorldbaseEmptyError', 'WorldbaseReadOnlyError',
+           'WorldbaseSchemaError', 'WorldbaseNoModuleError',
            'here', 'my', 'system', 'subdir', 'remote', 'MySQL')
 

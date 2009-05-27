@@ -91,7 +91,7 @@ rather than 'memory' mode; otherwise the semantics are the same.
 Create the NLMSA,
 
    >>> simple_al = cnestedlist.NLMSA('tempdir/hbb', mode='w')
-
+  
 load the sequences,
 
    >>> db = seqdb.SequenceFileDB('data/sp_all_hbb')

@@ -9,24 +9,168 @@
 
 The seqdb module provides a simple, consistent interface to sequence databases 
 from a variety of different storage sources such as FASTA, BLAST and 
-relational databases.  Sequence databases are modeled 
-(like other Pygr container classes) as dictionaries, whose keys are 
-sequence IDs and whose values are sequence objects.  
-Pygr sequence objects use the Python sequence protocol in all the 
-ways you'd expect: a subinterval of a sequence object is just a 
-Python slice (s[0:10]), which just returns a sequence object 
-representing that interval; the reverse complement is just -s; 
-the length of a sequence is just len(s); to obtain the actual 
-string sequence of a sequence object is just str(s).  
-Pygr sequence objects work intelligently with different 
-types of back-end storage (e.g. relational databases or BLAST databases) 
-to efficiently access just the parts of sequence that are requested, 
-only when an actual sequence string is needed.
+relational databases.  
+
+* Sequence databases are modeled 
+  (like other Pygr container classes) as dictionaries, whose keys are 
+  sequence IDs and whose values are sequence objects.  
+
+* Pygr sequence objects use the Python sequence protocol in all the 
+  ways you'd expect:
+
+  * a subinterval of a sequence object is just a 
+    Python slice (``s[0:10]``), which just returns a sequence object 
+    representing that interval;
+
+  * the reverse complement is just ``-s``; 
+
+  * the length of a sequence is just ``len(s)``;
+
+  * to obtain the actual 
+    string sequence of a sequence object is just ``str(s)``.  
+
+* Pygr sequence objects work intelligently with different 
+  types of back-end storage (e.g. relational databases or BLAST databases) 
+  to efficiently access just the parts of sequence that are requested, 
+  only when an actual sequence string is needed.
+
+* When you request
+  a sequence object for ``'chr1'``, Pygr does *not* load the string
+  sequence of all chromosome 1 into memory.  Instead, it just creates
+  a Python object that acts as *reference* to the sequence.  You can
+  slice it, etc. as described above; only when you actually try
+  to extract its string value (using ``str()`` as described above)
+  will it retrieve sequence data.  And even then, it will only
+  retrieve the specific portion that you requested.
+
+* Pygr sequence databases implement two levels of caching:
+
+  * **object caching**: when you retrieve a sequence object, Pygr
+    caches it so that subsequent requests for the same sequence ID
+    will get the same sequence object.  This is done intelligently:
+
+    * while the user holds references to a sequence object, it will
+      be kept in the cache.
+
+    * if the user drops all references to a sequence object, it will
+      eventually be dropped from the cache.  :class:`SequenceDB` uses
+      :class:`classutil.RecentValueDictionary` to keep the most recently
+      accessed sequence objects in cache, up to a specified cache size
+      that you can set.  This gives the best of both worlds (high cache
+      hit rate and low cache size) for many applications where requests
+      for any given sequence tend to cluster in time.
+
+  * **string caching**: :class:`SequenceDB` provides a flexible mechanism
+    for caching sequence strings to keep disk / network traffic to a 
+    minimum.  Specifically, objects that work with sequences can pass
+    *cache hints* that indicate what specific sequence intervals a user
+    of that object is likely to need.  Then any number of requests
+    within one of these intervals will only require a single string
+    retrieval (which is then cached, and re-used for all subsequent 
+    requests that fall within that interval).  This transparent 
+    mechanism is used by Pygr classes like :class:`cnestedlist.NLMSASlice`,
+    and speed up working with genome sequence alignments by many-fold.
+
+    For more information, see the section below on
+    `Sequence Interval Caching`_
+
+SequenceDB
+----------
+
+The base class for implementing Pygr sequence databases.
+
+.. class:: SequenceDB(itemClass=FileDBSequence, itemSliceClass=None, autoGC=True, **kwargs)
+
+   * *itemClass*: the object class to use for instantiating new
+     sequence objects from this database.  You can set this to create
+     customized sequence storage behaviors.  This is used by
+     :mod:`worldbase` to propagate correct attribute schemas to items
+     / slices from database containers managed by it.
+
+   * *itemSliceClass*: the object class to use for instantiating new
+     sequence slice objects (i.e. subintervals of sequences from this
+     database).  You can set this to create customized sequence
+     behaviors.  This is used by :mod:`worldbase` to propagate correct
+     attribute schemas to items / slices from database containers
+     managed by it.
+
+   * *autoGC*: if True, automatically garbage-collect cache entries
+     for sequence objects.  When you request a sequence object from a
+     :class:`SequenceDB`, it keeps it in a cache, both for speeding up future
+     requests, and to ensure that any two requests for the same sequence ID
+     are guaranteed to return the same Python object.  To save memory,
+     when you drop all references to a given sequence object, SequenceFileDB
+     also flushes it from its cache.  This is implemented using a
+     :class:`classutil.RecentValueDictionary`.
+
+Useful methods / attributes:
+
+.. attribute:: seqInfoDict
+
+   This should be provided by any sequence database class; other Pygr
+   classes, like :class:`cnestedlist.NLMSA`, require it.  This must be
+   a dictionary-like object that can be queried with any valid
+   sequence ID.  Such a query must return an object
+   with named attributes describing
+   that specific sequence.  At a minimum, it must include a *length*
+   attribute, giving the sequence's length.  This provides a general
+   way for user classes to obtain information about the sequence
+   without actually constructing the sequence object.
+
+:class:`SequenceDB` implements a Python dictionary interface,
+so all of the methods you would expect for a dictionary are available.
+For example:
+
+.. method:: SequenceDB.__iter__()
+
+   iterate over all IDs in the database.
+
+
+.. method:: SequenceDB.__len__()
+
+   returns number of sequences in the database.
+
+
+.. method:: SequenceDB.__invert__()
+
+   Python's invert operator (``~``, the "tilde" character)
+   enables reverse-mapping of sequence objects to their string ID::
+
+      seq = db['HBB1_MOUSE']
+      ...
+      id = (~db)[seq]
+      # id -> HBB1_MOUSE
+
+.. method:: SequenceDB.cacheHint(ivalDict, owner)
+
+   Save a cache hint dictionary associated with the specified *owner*
+   object.  *ivalDict* must be a dictionary of sequence IDs, each with 
+   associated cache interval *(start, stop)* tuple.  *owner* should be
+   the object whose lifetime should determine the lifetime of these
+   cache entries -- i.e. when the user drops all references to *owner*,
+   its associated cache entries will be flushed from the cache.
+   *owner* can be any Python object that supports weak references.
+
+   For more information, see the section below on
+   `Sequence Interval Caching`_
+
+
 
 SequenceFileDB
 --------------
-Interface to a sequence database, typically initialized from a FASTA sequence file.
-This class was renamed from "BlastDB" in Pygr 0.8.
+Subclasses :class:`SequenceDB`, specifically for
+accessing a sequence database stored in a file, 
+typically initialized from a FASTA sequence file.
+
+* This is Pygr's primary class for accessing a sequence database.
+  It replaces BlastDB, which was deprecated in Pygr 0.8.
+
+* It uses :class:`FileDBSequence` as its *itemClass* (i.e. to represent
+  individual sequence objects retrieved from the database).
+
+* It supplies a :meth:`SequenceFileDB.strslice()` method that
+  efficiently retrieves sequence slices from the database file using
+  ``fseek()``.
 
 Options for constructing a SequenceFileDB:
 
@@ -37,18 +181,6 @@ Options for constructing a SequenceFileDB:
 
    * *filepath*: path to the text sequence file (typically FASTA).
 
-   * *itemClass*: the object class to use for instantiating new sequence
-     objects from this database.  You can set this to create customized
-     sequence behaviors.
-     This is used by :class:`pygr.Data` to propagate correct attribute schemas to
-     items / slices from database containers managed by it.
-
-   * *itemSliceClass*: the object class to use for instantiating new
-     sequence slice objects (i.e. subintervals of sequences from this database).
-     You can set this to create customized sequence behaviors.
-     This is used by :class:`pygr.Data` to propagate correct attribute schemas to
-     items / slices from database containers managed by it.
-
    * *reader*: allows you to specify a parser function.
      It will be called with
      two arguments: ``reader(ifile, filename)``; and it should
@@ -56,55 +188,31 @@ Options for constructing a SequenceFileDB:
      each provide a sequence ID, length and sequence string.  See
      the Pygr Developer Guide for details.
 
-   * *autoGC*: if True, automatically garbage-collect cache entries
-     for sequence objects.  When you request a sequence object from
-     SequenceFileDB, it keeps it in a cache, both for speeding up future
-     requests, and to ensure that any two requests for the same sequence ID
-     are guaranteed to return the same Python object.  To save memory,
-     when you drop all references to a given sequence object, SequenceFileDB
-     also flushes it from its cache.  This is implemented using a Python
-     WeakValueDictionary.
+Useful methods / attributes:
 
+.. method:: SequenceFileDB.close()
 
-Useful methods:
-
-:class:`SequenceFileDB` implements a Python dictionary interface,
-so all of the methods you would expect for a dictionary are available.
-For example:
-
-.. method:: iter()
-
-   iterate over all IDs in the database.
-
-
-.. method:: len()
-
-   returns number of sequences in the database.
-
-
-.. method:: __invert__()
-
-   The invert operator (\textasciitilde, the "tilde" character)
-   enables reverse-mapping of sequence objects to their string ID::
-
-      id = (~db)[seq] # GET IDENTIFIER FOR THIS SEQUENCE FROM ITS DATABASE
-
-
-
-
-
-Useful attributes:
-
+   You should always close the database when you are done with it,
+   which will cause it to immediately close any open files.
+   This is particularly important on Windows, where operations like
+   deleting a file may cause unpleasant problems if another process
+   still has the file open.
   
-.. attribute:: filepath
+.. attribute:: SequenceFileDB.filepath
 
    the location of the raw sequence file (by default, FASTA)
    upon which this :class:`SequenceFileDB` is based.
   
+.. method:: SequenceFileDB.strslice(seqID, start, end, useCache=True)
 
+   Retrieves a string representing the specified interval of
+   the specified sequence.  Users normally will not need to call
+   this method directly; just use ``str()`` on any sequence object
+   or sequence slice object.
 
 PrefixUnionDict
 ---------------
+
 This class acts as a wrapper for a set of dictionaries, each
 of which is assigned a specific string "prefix".  It provides
 a dictionary interface that accepts string keys of the form
@@ -149,13 +257,7 @@ a given sequence object is derived from the :class:`PrefixUnionDict`
    sequence dbs to open.
 
 
-.. method:: __invert__()
-
-   The invert operator (~, the "tilde" character) enables
-   reverse-mapping of sequence objects to their string ID, that is,
-   for a given sequence object *seq* derived from the union (or a
-   slice of a sequence from the union), return a string identifier in
-   the form of "foo.bar".
+.. method:: PrefixUnionDict.__invert__()
 
    This is the recommended way to get the "fully qualified sequence
    ID", i.e. with the appropriate prefix prepended::
@@ -165,32 +267,7 @@ a given sequence object is derived from the :class:`PrefixUnionDict`
 
 .. method:: newMemberDict(**kwargs)
 
-   Returns a new member dictionary for testing membership in
-   the distinct prefix groups.  See :class:`PrefixUnionMemberDict`.
-
-
-.. method:: cacheHint(owner,ivalDict)
-
-   Communicates a set of caching hints to the appropriate member
-   databases.  *ivalDict* must be a dictionary whose keys are
-   sequence ID strings, and whose values are each a (start,stop) tuple
-   for the associated covering interval coordinates to
-   cache for each sequence.  *owner* should be a python object
-   whose existence controls the lifetime of these cache hints.
-   When *owner* is garbage-collected by Python (due to its
-   reference count going to zero), the member databases will clear
-   these cache hints from their cache storage.
-
-   On :class:`PrefixUnionDict`, this method simply passes along
-   the cache hints to the appropriate member databases by calling
-   their :meth:`cacheHint` method, without itself doing anything
-   to cache the information.
-
-.. method:: getName(path)
-
-   **This method is deprecated;** instead use the :meth:`__invert__` operator
-   above.
-
+   @@CTB
 
 .. method:: writeHeaderFile(filename)
 
@@ -204,6 +281,11 @@ a given sequence object is derived from the :class:`PrefixUnionDict`
    various sequence databases (which must have a :attr:`filepath`
    attribute).  This header file can be used for later reopening the
    prefix-union in a single step.
+
+.. method:: getName(path)
+
+   **This method is deprecated;** instead use the :meth:`__invert__` operator
+   above.
 
 
 _PrefixUnionMemberDict
@@ -271,15 +353,14 @@ the standard :meth:`__getitem__` method:
    to the prefixUnion for the NLMSA.
 
 
-
-
 FileDBSequence
 --------------
+
 The default class for sequence objects returned from SequenceFileDB.
 It provides efficient, fast access to sequence slices (subsequences).
-When the SequenceFileDB is initially opened,
-Pygr constructs a length and offset index that enables FileDBSequence to ``seek()``
-to the correct location for any substring of the sequence.
+When the SequenceFileDB is initially opened, Pygr constructs a length
+and offset index that enables FileDBSequence to ``seek()`` to the
+correct location for any substring of the sequence.
 
 SQLSequence
 -----------
@@ -324,8 +405,8 @@ server for a blast database, accessible on port 5020::
 
 XMLRPCSequenceDB
 ----------------
-Class for a client interface that accesses a Blast database over
-XMLRPC (from the the :class:`BlastDBXMLRPC` acting as the server).
+Class for a client interface that accesses a sequence database over
+XMLRPC (from the :class:`BlastDBXMLRPC` acting as the server).
 
 .. class:: XMLRPCSequenceDB(url,name)
 
@@ -338,6 +419,31 @@ XMLRPC (from the the :class:`BlastDBXMLRPC` acting as the server).
       hbb = db['HBB_HUMAN'] # GET A SEQUENCE OBJECT FROM THE DATABASE...
 
 
-Currently, this class provides sequence access.  You can work with sequences
-exactly as you would with a :class:`BlastDB`, but cannot perform actual BLAST searches
-(i.e. the :meth:`blast` and :meth:`megablast` methods don't work over XMLRPC).
+Currently, this class provides sequence access.  You can work with
+sequences exactly as you would with a :class:`SequenceFileDB`.
+
+Sequence Interval Caching
+-------------------------
+
+This consists of several pieces:
+
+* an object calls :meth:`SequenceDB.cacheHint()` with a set of 
+  sequence interval coordinates that it expects its users to
+  access.  It is recorded as the *owner* of these cache hints.
+
+* Any sequence string request that falls within one of these
+  intervals will trigger retrieval of the sequence string for the
+  whole interval, which is then kept in cache.
+
+* Any subsequent requests that fall within that interval, will
+  be immediately returned from cache.
+
+* When the *owner* object is dropped (i.e. the user drops all
+  references to that object), all of its cache hints (and
+  retrieved sequence strings) are flushed from the cache.
+
+Currently, :class:`cnestedlist.NLMSASlice` uses this cacheHint 
+mechanism, so users of :class:`cnestedlist.NLMSA` will transparently
+benefit from its speed-ups, without having to do anything to invoke it.
+
+

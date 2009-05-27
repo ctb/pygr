@@ -15,7 +15,7 @@ class TestBase(unittest.TestCase):
     "A base class to all pygr.Data test classes"
 
     def setUp(self, pygrDataPath=None, **kwargs):
-        # overwrite the PYGRDATAPATH environment variable
+        # overwrite the WORLDBASEPATH environment variable
         self.tempdir = testutil.TempDir('pygrdata')
         if pygrDataPath is None:
             pygrDataPath = self.tempdir.path
@@ -329,7 +329,7 @@ class InvalidPickle_Test(TestBase):
             s = pygr.Data.dumps(self.bad) # should raise exception
             msg = 'failed to catch bad attempt to invalid module ref'
             raise ValueError(msg)
-        except pygr.Data.PygrDataNoModuleError:
+        except pygr.Data.WorldbaseNoModuleError:
             pass
         
 class XMLRPC_Test(TestBase):

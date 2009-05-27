@@ -3,7 +3,7 @@ import socket, unittest, os, md5, pickle, datetime
 import testlib
 from testlib import testutil, SkipTest, PygrTestProgram
 from pygr import seqdb, cnestedlist, metabase, mapping
-from pygr import worldbase, worldbaseSchema
+from pygr import worldbase
 from pygr.downloader import SourceURL, GenericBuilder
 
 try:
@@ -12,24 +12,24 @@ except NameError:
     from sets import Set as set
 
 class TestBase(unittest.TestCase):
-    "A base class to all pygr.Data test classes"
+    "A base class to all worldbase test classes"
 
-    def setUp(self, pygrDataPath=None, **kwargs):
-        # overwrite the PYGRDATAPATH environment variable
+    def setUp(self, worldbasePath=None, **kwargs):
+        # overwrite the WORLDBASEPATH environment variable
         self.tempdir = testutil.TempDir('pygrdata')
-        if pygrDataPath is None:
-            pygrDataPath = self.tempdir.path
-        worldbase.update(pygrDataPath, **kwargs)
+        if worldbasePath is None:
+            worldbasePath = self.tempdir.path
+        worldbase.update(worldbasePath, **kwargs)
         # handy shortcuts
         self.EQ = self.assertEqual
 
 class Download_Test(TestBase):
-    "Save seq db and interval to pygr.Data shelve"
+    "Save seq db and interval to worldbase shelve"
 
     # tested elsewhere as well, on Linux makes gzip ask for permissions
     # to overwrite
     def test_download(self): 
-        "Downloading of gzipped file using pygr.Data"
+        "Downloading of gzipped file using worldbase"
         
         url = SourceURL('http://www.doe-mbi.ucla.edu/~leec/test.gz')
         url.__doc__ = 'test download'
@@ -96,8 +96,8 @@ class DNAAnnotation_Test(TestBase):
                 nlmsa.build(verbose=False)
                 nlmsa.__doc__ = 'trivial map'
                 worldbase.Bio.Test.map = nlmsa
-                worldbaseSchema.Bio.Test.map = metabase.ManyToManyRelation(db,
-                                                       annoDB,bindAttrs=('exons',))
+                worldbase.schema.Bio.Test.map = metabase.ManyToManyRelation(db,
+                                                annoDB,bindAttrs=('exons',))
                 worldbase.commit()
                 worldbase.clear_cache()
             finally:
@@ -150,7 +150,7 @@ def populate_swissprot():
     worldbase.Bio.Seq.spmap = m
 
     # create an annotation database and bind as exons attribute
-    worldbaseSchema.Bio.Seq.spmap = metabase.OneToManyRelation(sp, sp,
+    worldbase.schema.Bio.Seq.spmap = metabase.OneToManyRelation(sp, sp,
                                                          bindAttrs=('buddy',))
     annoDB = seqdb.AnnotationDB({1:('HBB1_TORMA',10,50)}, sp,
                                 sliceAttrDict=dict(id=0, start=1, stop=2)) 
@@ -167,7 +167,7 @@ def populate_swissprot():
     nlmsa.__doc__ = 'a little map'
     worldbase.Bio.Annotation.annoDB = annoDB
     worldbase.Bio.Annotation.map = nlmsa
-    worldbaseSchema.Bio.Annotation.map = \
+    worldbase.schema.Bio.Annotation.map = \
          metabase.ManyToManyRelation(sp, annoDB, bindAttrs=('exons',))
 
 def check_match(self):
@@ -275,7 +275,7 @@ class Sequence_Test(TestBase):
         m = mapping.Mapping(sourceDB=sp,targetDB=sp2)
         m.__doc__ = 'sp -> sp2'
         worldbase.Bio.Seq.testmap = m
-        worldbaseSchema.Bio.Seq.testmap = metabase.OneToManyRelation(sp, sp2)
+        worldbase.schema.Bio.Seq.testmap = metabase.OneToManyRelation(sp, sp2)
         worldbase.commit()
 
         worldbase.clear_cache()
@@ -287,7 +287,7 @@ class Sequence_Test(TestBase):
         m = mapping.Mapping(sourceDB=sp3,targetDB=sp2)
         m.__doc__ = 'sp3 -> sp2'
         worldbase.Bio.Seq.testmap2 = m
-        worldbaseSchema.Bio.Seq.testmap2 = metabase.OneToManyRelation(sp3, sp2)
+        worldbase.schema.Bio.Seq.testmap2 = metabase.OneToManyRelation(sp3, sp2)
         l = worldbase._mdb.resourceCache.keys()
         l.sort()
         assert l == ['Bio.Seq.sp2', 'Bio.Seq.sp3', 'Bio.Seq.testmap2']
@@ -304,7 +304,7 @@ class SQL_Sequence_Test(Sequence_Test):
             raise SkipTest, "no MySQL installed"
         
         self.dbtable = testutil.temp_table_name() # create temp db tables
-        Sequence_Test.setUp(self, pygrDataPath='mysql:' + self.dbtable,
+        Sequence_Test.setUp(self, worldbasePath='mysql:' + self.dbtable,
                             mdbArgs=dict(createLayer='temp'))
     def tearDown(self):
         testutil.drop_tables(worldbase._mdb.writer.storage.cursor, self.dbtable)
@@ -327,7 +327,7 @@ class InvalidPickle_Test(TestBase):
             s = metabase.dumps(self.bad) # should raise exception
             msg = 'failed to catch bad attempt to invalid module ref'
             raise ValueError(msg)
-        except metabase.PygrDataNoModuleError:
+        except metabase.WorldbaseNoModuleError:
             pass
         
 class XMLRPC_Test(TestBase):
