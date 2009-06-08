@@ -177,7 +177,8 @@ and align several intervals from other sequences to the mouse sequence:
    >>> simple_al[ival] += rat[42:62]
    >>> simple_al[ival] += frog[38:58]
 
-And, finally, build it and delete the in-memory handle:
+And, finally, build it and then delete the in-memory handle (to emulate
+quitting Python and starting from scratch):
 
    >>> simple_al.build(saveSeqDict=True)
    >>> del simple_al
@@ -215,9 +216,9 @@ and voila, now we can query the alignment, etc.
    >>> loaded_al[ival].keys()
    [HBB1_RAT[42:62], HBB1_XENLA[38:58]]
 
-In practice, if you store your sequence collections in ``pygr.Data``,
+In practice, if you store your sequence collections in ``worldbase``,
 you don't need to worry about seqDict mechanisms.  However, if you're
-not using ``pygr.Data`` then you'll need to keep track of your sequence
+not using ``worldbase`` then you'll need to keep track of your sequence
 dictionaries.
 
 Creating alignments with BLAST
