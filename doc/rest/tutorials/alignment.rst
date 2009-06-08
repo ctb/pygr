@@ -109,8 +109,8 @@ Now, let's build an alignment containing the two ungapped blocks:
    >>> al[second_ival] += ungapped[40:]
    >>> al.build()
 
-As you'd expect, querying 'al' with either 'ungapped' or 'gapped' returns
-two elements with 100% identity:
+As you'd expect, querying 'al' with either 'ungapped' or 'gapped'
+returns two elements with 100% identity: ::
 
    >>> for (src, dest, edge) in al[gapped].edges():
    ...   print repr(src), repr(dest), '%.2f' % (edge.pIdentity(),)
@@ -224,16 +224,30 @@ dictionaries.
 Creating alignments with BLAST
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Let's suppose you have some sequences in a database, and you'd like to use
+BLAST to search that database and load the results into an alignment. Simple!
+First, load in the database and create a ``BlastMapping`` against that
+database:
+
    >>> from pygr import blast
    >>> db = seqdb.SequenceFileDB('data/gapping.fa')
    >>> blastmap = blast.BlastMapping(db)
 
+Now pull in some sequences (for now, we'll use sequences from the same
+database):
+
    >>> ungapped = db['ungapped']
    >>> gapped = db['gapped']
 
-Now, let's use BLAST to search the sequence
+And let's use BLAST to search the database with the sequence!  The first
+approach is to use the ``__getitem__`` interface to ``BlastMapping``:
 
-   >>> edges = blastmap[gapped].edges()
+   >>> slice = blastmap[gapped]
+   >>> edges = slice.edges()
+
+The ``__getitem__`` interface returns an ``NLMSASlice`` containing
+intervals aligned between the source sequence (``gapped``) and
+sequences in the database:
 
    >>> for (src, dest, edge) in edges:
    ...   print repr(src), 'matches', repr(dest)
@@ -246,23 +260,19 @@ Note that 'blastmap' will, by default, ignore self-matches:
 there are no 'gapped' to 'gapped' matches above, even though
 'gapped' is present in the database being searched.
 
-You can also search the entire database against itself:
+You can also search the entire database against itself using the
+``__call__`` interface to ``BlastMapping``; this returns a full
+alignment in an ``NLMSA``, from which you can retrieve individual
+``NLMSASlice`` objects by querying by sequence:
 
-   >>> al = blastmap(None, queryDB=db)
+   >>> al = blastmap(queryDB=db)   # @CTB change out 'None'
    >>> for seq in db.values():
    ...    for (src, dest, edge) in al[seq].edges():
-   ...       print repr(src), repr(dest)
-   gapped[0:40] ungapped[0:40]
-   gapped[44:74] ungapped[40:70]
-   ungapped[0:40] gapped[0:40]
-   ungapped[40:70] gapped[44:74]
-   ungapped[40:70] ungapped[44:70]
-   ungapped[44:70] ungapped[40:66]
-
-Note that you get duplicate matches here because both the
-gapped-to-ungapped and ungapped-to-gapped matches are entered into the
-alignment; because BLAST is not a symmetric algorithm, these may
-result in different alignments.
+   ...       print repr(src), 'matches', repr(dest)
+   gapped[0:40] matches ungapped[0:40]
+   gapped[44:74] matches ungapped[40:70]
+   ungapped[0:40] matches gapped[0:40]
+   ungapped[40:70] matches gapped[44:74]
 
 Using the "translated BLASTs" (blastx and tblastx)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -319,3 +329,5 @@ Building an Alignment Database from MAF files
 
 Example: Mapping an entire gene set onto a new genome version
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. @CTB figure out sphinx linking stuff to link NLMSA To NLMSA docs, etc.
