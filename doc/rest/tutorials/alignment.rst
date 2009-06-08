@@ -96,6 +96,8 @@ Here, 'gapped' is a copy of 'ungapped' with 4 extra nucleotides
    ATGGTGCACCTGACTGATGCTGAGAAGGCTGCTGTCTCTGGCCTGTGGGGAAAGGTGAACTCCGATGAAG
    >>> print gapped
    ATGGTGCACCTGACTGATGCTGAGAAGGCTGCTGTCTCTGatgcGCCTGTGGGGAAAGGTGAACTCCGATGAAG
+   >>> print ' '*40 + '^^^^'
+                                           ^^^^
 
 Now, let's build an alignment containing the two ungapped blocks:
    
@@ -140,7 +142,7 @@ sequence) use the 'maxinsert' parameter:
 
 For both of these queries, you can see that the percent identity is
 properly adjusted to reflect the identity of only 70 of the 74
-nucleotides (70/74 = 94.6%)
+nucleotides (70/74 = 94.6%).
 
 There are a number of other ways to control how ``NLMSASlice`` queries
 work, including minimum identity filters, minimum aligned block sizes,
@@ -250,13 +252,11 @@ You can also search the entire database against itself:
    ...    for (src, dest, edge) in al[seq].edges():
    ...       print repr(src), repr(dest)
    gapped[0:40] ungapped[0:40]
-   gapped[0:40] ungapped[0:40]
-   gapped[44:74] ungapped[40:70]
    gapped[44:74] ungapped[40:70]
    ungapped[0:40] gapped[0:40]
-   ungapped[0:40] gapped[0:40]
    ungapped[40:70] gapped[44:74]
-   ungapped[40:70] gapped[44:74]
+   ungapped[40:70] ungapped[44:70]
+   ungapped[44:70] ungapped[40:66]
 
 Note that you get duplicate matches here because both the
 gapped-to-ungapped and ungapped-to-gapped matches are entered into the
