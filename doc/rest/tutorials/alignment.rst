@@ -303,10 +303,10 @@ sequence we searched with:
    ...   if rat_prot in match:
    ...      for (src, dest, edge) in match.edges():
    ...         print repr(src), repr(dest)
-   ...         print src[:20]
+   ...         print src[:20], 'frame', src.frame
    ...         print dest[:20]
    annot3[0:146] HBB2_RAT[0:146]
-   VHLTDAEKAAVSGLWGKVNS
+   VHLTDAEKAAVSGLWGKVNS frame 1
    VHLTDAEKATVSGLWGKVNA
 
 How can we get the original sequence?  Easy -- dereference the
