@@ -476,7 +476,7 @@ class SeqPath(object):
                 path._seqtype=guess_seqtype(str(self[0:40]))
                 return path._seqtype
 
-    def translation(self, frame):
+    def translation(self, frame=+1):
         if self.seqtype() == PROTEIN_SEQTYPE:
             raise ValueError('protein sequence has no translation!')
 
@@ -506,19 +506,21 @@ class SeqPath(object):
                                          sliceAttrDict=dict(id=0,start=1,stop=2))
             seqDB.translationDB = translationDB
 
-        seq = self.pathForward
+        path = self.pathForward
         if frame < 0:
-            seq = -seq
+            path = -path
             frame = -frame
 
-        start = frame - 1
-        stop = 3 * (seq.stop / 3)
-        a = translationDB.new_annotation(str(len(translationDB)),
-                                         (seq.id, start, stop))
+        # we want to return a slice into a translation of the whole
+        # thing.  tricky math!  @@CTB
 
+        start = frame - 1
+        stop = 3 * (path.stop / 3)
+        a = translationDB.new_annotation(str(len(translationDB)),
+                                         (path.id, start, stop))
         frames[frame] = a
 
-        return a
+        return a[(self.start + frame - 1) / 3:(self.stop + frame - 1) / 3]
 
     def __str__(self):
         'string for this sequence interval; use reverse complement if necessary...'
