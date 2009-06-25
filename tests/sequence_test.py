@@ -1,6 +1,6 @@
 import unittest
 from testlib import testutil, PygrTestProgram
-from pygr import sequence
+from pygr import sequence, seqdb
 
 class Sequence_Test(unittest.TestCase):
     'basic sequence class tests'
@@ -88,6 +88,36 @@ class Sequence_Test(unittest.TestCase):
                          sequence.RNA_SEQTYPE
         assert sequence.Sequence('kqwestvvarphal', 'foo').seqtype() == \
                          sequence.PROTEIN_SEQTYPE
+
+class SequenceTranslation_Test(unittest.TestCase):
+    '''Tests for the translation() function.'''
+    
+    def setUp(self):
+        self.db = seqdb.SequenceFileDB(testutil.datafile('translation.fa'))
+        self.seq6 = self.db['seq6']
+        self.seq7 = self.db['seq7']
+        self.seq8 = self.db['seq8']
+
+    def test_6_path(self):
+        assert len(self.seq6.translation(1)) == 2
+        assert len(self.seq6.translation(2)) == 1
+        assert len(self.seq6.translation(3)) == 1
+        
+    def test_7_path(self):
+        assert len(self.seq7.translation(1)) == 2
+        assert len(self.seq7.translation(2)) == 2
+        assert len(self.seq7.translation(3)) == 1
+        
+    def test_8_path(self):
+        assert len(self.seq8.translation(1)) == 2
+        assert len(self.seq8.translation(2)) == 2
+        assert len(self.seq8.translation(3)) == 2
+
+    def test_slice_frame_adjust(self):
+        s = self.seq8
+        assert str(s[1:].translation(1)) == str(s[0:].translation(2))
+        assert str(s[2:].translation(1)) == str(s[0:].translation(3))
+        assert str(s[3:].translation(1)) == str(s[0:].translation(1))
 
 # @CTB
 '''

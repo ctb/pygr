@@ -476,35 +476,44 @@ class SeqPath(object):
                 path._seqtype=guess_seqtype(str(self[0:40]))
                 return path._seqtype
 
-    def translation(self, frame=+1):
-        if self.seqtype() == PROTEIN_SEQTYPE:
-            raise ValueError('protein sequence has no translation!')
+    def _build_translations_cache(self):
+        from annotation import AnnotationDB, TranslationAnnot, \
+             TranslationAnnotSlice
 
-        # first try retrieving the frame from the cache
-        try:
-            frames = self._frames
-            if frame in frames:
-                return frames[frame]
-        except AttributeError:
-            self._frames = {}
-            frames = self._frames
-
-        # not in cache?  ok, construct translationDB if possible.
+        # do we have a seqDB against which to build translations?
         try:
             seqDB = self.db
         except AttributeError:
             raise Exception("no associated database; cannot get translation")
+
+        frames = {}
+        translationDB = AnnotationDB({}, seqDB, itemClass=TranslationAnnot,
+                                     itemSliceClass=TranslationAnnotSlice,
+                                     sliceAttrDict=dict(id=0,start=1,stop=2))
+
+        seqDB.translationDB = translationDB
+        self._frames = frames
+
+        return frames, translationDB
         
+
+    def translation(self, frame=+1):
+        if abs(frame) < 1 or abs(frame) > 3:
+            raise ValueError('no such frame %s!' % (frame,))
+        
+        if self.seqtype() == PROTEIN_SEQTYPE:
+            raise ValueError('protein sequence has no translation!')
+        
+        # try retrieving the frame cache & translation DB...
         try:
-            translationDB = seqDB.translationDB
+            frames = self._frames
+            translationDB = self.db.translationDB
         except AttributeError:
-            from annotation import AnnotationDB, TranslationAnnot, \
-                 TranslationAnnotSlice
+            # not there -- create!
+            frames, translationDB = self._build_translations_cache()
             
-            translationDB = AnnotationDB({}, seqDB, itemClass=TranslationAnnot,
-                                         itemSliceClass=TranslationAnnotSlice,
-                                         sliceAttrDict=dict(id=0,start=1,stop=2))
-            seqDB.translationDB = translationDB
+        # adjust frame to get the right frame wrt the parent translation
+        frame += self.start % 3
 
         path = self.pathForward
         if frame < 0:
@@ -513,14 +522,17 @@ class SeqPath(object):
 
         # we want to return a slice into a translation of the whole
         # thing.  tricky math!  @@CTB
-
         start = frame - 1
-        stop = 3 * (path.stop / 3)
+        length = 3 * int((path.stop - (frame - 1)) / 3)
         a = translationDB.new_annotation(str(len(translationDB)),
-                                         (path.id, start, stop))
+                                         (path.id, start, start + length))
         frames[frame] = a
 
-        return a[(self.start + frame - 1) / 3:(self.stop + frame - 1) / 3]
+        print self.start, self.stop
+
+        return a
+
+#        return a[(self.start + frame - 1) / 3:(self.stop + frame - 1) / 3]
 
     def __str__(self):
         'string for this sequence interval; use reverse complement if necessary...'
