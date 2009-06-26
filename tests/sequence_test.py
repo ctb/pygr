@@ -119,6 +119,41 @@ class SequenceTranslation_Test(unittest.TestCase):
         assert str(s[2:].translation(1)) == str(s[0:].translation(3))
         assert str(s[3:].translation(1)) == str(s[0:].translation(1))
 
+    def test_slice_frame_adjust(self):
+        s = self.seq8
+        assert str(s[0:3].translation(1)) == 'M', s[0:3].translation(1)
+        assert str(s[3:6].translation(1)) == '*', s[3:6].translation(1)
+        
+        x = s[1:4].translation(1)                    # frame 1 @ nt 1
+        y = s.translation(2)[:1]                     # == frame 2, aa 1
+        assert str(x) == str(y), (str(x), str(y))
+
+        x = s[1:5].translation(2)                    # frame 2 @ nt 1
+        y = s.translation(3)[:1]                     # == frame 3, aa 1
+        assert str(x) == str(y)
+
+        x = s[1:6].translation(3)                    # frame 3 @ pos 1
+        y = s.translation(1)[1:2]                    # == frame 1, aa 2
+        assert str(x) == str(y)
+        
+    def test_annot_identity(self):
+        return
+    
+        s = self.seq8
+        
+        x = s[1:3].translation(1)
+        y = s.translation(2)[:1]
+        assert repr(x) == repr(y), (x, y)           # #@CTB
+
+        print '----'
+
+        x = s[1:4].translation(2)
+        y = s.translation(3)[:1]
+        
+        print x, x.frame, y, y.frame
+        print '----'
+        assert repr(x) == repr(y), (x, y)           # #@CTB
+
 # @CTB
 '''
 #from pygrdata_test import PygrSwissprotBase

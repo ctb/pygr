@@ -520,19 +520,21 @@ class SeqPath(object):
             path = -path
             frame = -frame
 
-        # we want to return a slice into a translation of the whole
-        # thing.  tricky math!  @@CTB
-        start = frame - 1
-        length = 3 * int((path.stop - (frame - 1)) / 3)
-        a = translationDB.new_annotation(str(len(translationDB)),
-                                         (path.id, start, start + length))
-        frames[frame] = a
+        a = frames.get(frame)
+        if a is None:
+            # generate translation of the parent sequence
+            parent_start = frame - 1
+            parent_length = 3 * int((path.stop - (frame - 1)) / 3)
+            a = translationDB.new_annotation(str(len(translationDB)),
+                                             (path.id, parent_start,
+                                              parent_start + parent_length))
+            frames[frame] = a
 
-        print self.start, self.stop
+        # we want to return a slice into a translation of the whole thing.
+        start = (self.start / 3)
+        length = ((self.stop - self.start + 1) / 3)
 
-        return a
-
-#        return a[(self.start + frame - 1) / 3:(self.stop + frame - 1) / 3]
+        return a[start:start+length]
 
     def __str__(self):
         'string for this sequence interval; use reverse complement if necessary...'
