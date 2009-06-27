@@ -513,7 +513,9 @@ class SeqPath(object):
             frames, translationDB = self._build_translations_cache()
             
         # adjust frame to get the right frame wrt the parent translation
-        frame += self.start % 3
+        parent_frame = frame + self.start % 3
+        if parent_frame > 3:
+            parent_frame -= 3
 
         path = self.pathForward
         if frame < 0:
@@ -523,16 +525,18 @@ class SeqPath(object):
         a = frames.get(frame)
         if a is None:
             # generate translation of the parent sequence
-            parent_start = frame - 1
-            parent_length = 3 * int((path.stop - (frame - 1)) / 3)
+            parent_start = parent_frame - 1
+            parent_length = 3 * int((path.stop - (parent_frame - 1)) / 3)
             a = translationDB.new_annotation(str(len(translationDB)),
                                              (path.id, parent_start,
                                               parent_start + parent_length))
-            frames[frame] = a
+            frames[parent_frame] = a
+
+            assert a.frame == parent_frame, (a.frame, parent_frame)
 
         # we want to return a slice into a translation of the whole thing.
-        start = (self.start / 3)
-        length = ((self.stop - self.start) / 3)
+        start = int((self.start + frame - 1) / 3)
+        length = int((self.stop - self.start) / 3)
 
         return a[start:start+length]
 

@@ -148,10 +148,12 @@ class SequenceTranslation_Test(unittest.TestCase):
         x = s[1:4].translation(1)                    # frame 1 @ nt 1
         y = s.translation(2)[:1]                     # == frame 2, aa 0
         assert str(x) == str(y)
+#        assert x.frame == 1, x.frame
+#        assert y.frame == 2
 
         x = s[1:5].translation(2)                    # frame 2 @ nt 1
         y = s.translation(3)[:1]                     # == frame 3, aa 0
-        assert str(x) == str(y)
+        assert str(x) == str(y), (str(x), str(y))
 
         x = s[1:6].translation(3)                    # frame 3 @ pos 1
         y = s.translation(1)[1:2]                    # == frame 1, aa 1
