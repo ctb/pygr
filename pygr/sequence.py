@@ -532,7 +532,7 @@ class SeqPath(object):
 
         # we want to return a slice into a translation of the whole thing.
         start = (self.start / 3)
-        length = ((self.stop - self.start + 1) / 3)
+        length = ((self.stop - self.start) / 3)
 
         return a[start:start+length]
 

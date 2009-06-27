@@ -97,6 +97,7 @@ class SequenceTranslation_Test(unittest.TestCase):
         self.seq6 = self.db['seq6']
         self.seq7 = self.db['seq7']
         self.seq8 = self.db['seq8']
+        self.seq9 = self.db['seq9']
 
     def test_6_path(self):
         assert len(self.seq6.translation(1)) == 2
@@ -120,22 +121,56 @@ class SequenceTranslation_Test(unittest.TestCase):
         assert str(s[3:].translation(1)) == str(s[0:].translation(1))
 
     def test_slice_frame_adjust(self):
-        s = self.seq8
+        s = self.seq9
+
+        ### slices of first-frame translation are correct:
+        
         assert str(s[0:3].translation(1)) == 'M', s[0:3].translation(1)
         assert str(s[3:6].translation(1)) == '*', s[3:6].translation(1)
+        assert str(s[6:9].translation(1)) == 'L', s[6:9].translation(1)
+
+        ### starting with nt 0
         
-        x = s[1:4].translation(1)                    # frame 1 @ nt 1
-        y = s.translation(2)[:1]                     # == frame 2, aa 1
+        x = s[0:3].translation(1)                    # frame 1 @ nt 0
+        y = s.translation(1)[:1]                     # == frame 1, aa 0
         assert str(x) == str(y), (str(x), str(y))
 
+        x = s[0:4].translation(2)                    # frame 2 @ nt 0
+        y = s.translation(2)[:1]                     # == frame 2, aa 0
+        assert str(x) == str(y), (str(x), str(y))
+
+        x = s[0:5].translation(3)                    # frame 3 @ nt 0
+        y = s.translation(3)[:1]                     # == frame 3, aa 0
+        assert str(x) == str(y), (str(x), str(y))
+
+        ## starting with nt 1
+
+        x = s[1:4].translation(1)                    # frame 1 @ nt 1
+        y = s.translation(2)[:1]                     # == frame 2, aa 0
+        assert str(x) == str(y)
+
         x = s[1:5].translation(2)                    # frame 2 @ nt 1
-        y = s.translation(3)[:1]                     # == frame 3, aa 1
+        y = s.translation(3)[:1]                     # == frame 3, aa 0
         assert str(x) == str(y)
 
         x = s[1:6].translation(3)                    # frame 3 @ pos 1
-        y = s.translation(1)[1:2]                    # == frame 1, aa 2
+        y = s.translation(1)[1:2]                    # == frame 1, aa 1
+        assert str(x) == str(y), (str(x), str(y))
+
+        ## starting with nt 2
+
+        x = s[2:5].translation(1)                    # frame 1 @ nt2
+        y = s.translation(3)[0]                      # == frame 3, aa 0
+        assert str(x) == str(y), (str(x), str(y))
+
+        x = s[2:6].translation(2)                    # frame 2 @ nt2
+        y = s.translation(1)[1:2]                    # == frame 1, aa 1
         assert str(x) == str(y)
-        
+
+        x = s[2:7].translation(3)                    # frame 3 @ nt2
+        y = s.translation(2)[1:2]                    # == frame 2, aa 1
+        assert str(x) == str(y)
+
     def test_annot_identity(self):
         return
     
