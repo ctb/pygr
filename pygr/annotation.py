@@ -75,7 +75,7 @@ class TranslationAnnotSeqDescr(object):
 class TranslationAnnotFrameDescr(object):
     """Get the frame of this protein translation, relative to original DNA."""
     def __get__(self, obj, objtype):
-        orig = obj.pathForward.sequence
+        orig = obj.sequence
         if orig.orientation > 0:
             frame = (orig.start % 3) + 1
         else:

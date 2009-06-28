@@ -134,44 +134,54 @@ class SequenceTranslation_Test(unittest.TestCase):
         x = s[0:3].translation(1)                    # frame 1 @ nt 0
         y = s.translation(1)[:1]                     # == frame 1, aa 0
         assert str(x) == str(y), (str(x), str(y))
+        assert x.frame == 1
+        assert y.frame == 1
 
         x = s[0:4].translation(2)                    # frame 2 @ nt 0
         y = s.translation(2)[:1]                     # == frame 2, aa 0
         assert str(x) == str(y), (str(x), str(y))
+        assert x.frame == 2
+        assert y.frame == 2
 
         x = s[0:5].translation(3)                    # frame 3 @ nt 0
         y = s.translation(3)[:1]                     # == frame 3, aa 0
         assert str(x) == str(y), (str(x), str(y))
+        assert x.frame == 3
+        assert y.frame == 3
 
         ## starting with nt 1
 
         x = s[1:4].translation(1)                    # frame 1 @ nt 1
         y = s.translation(2)[:1]                     # == frame 2, aa 0
         assert str(x) == str(y)
-#        assert x.frame == 1, x.frame
-#        assert y.frame == 2
+        assert y.frame == 2
 
         x = s[1:5].translation(2)                    # frame 2 @ nt 1
         y = s.translation(3)[:1]                     # == frame 3, aa 0
         assert str(x) == str(y), (str(x), str(y))
+        assert y.frame == 3
 
         x = s[1:6].translation(3)                    # frame 3 @ pos 1
         y = s.translation(1)[1:2]                    # == frame 1, aa 1
         assert str(x) == str(y), (str(x), str(y))
+        assert y.frame == 1
 
         ## starting with nt 2
 
         x = s[2:5].translation(1)                    # frame 1 @ nt2
         y = s.translation(3)[0]                      # == frame 3, aa 0
         assert str(x) == str(y), (str(x), str(y))
+        assert y.frame == 3
 
         x = s[2:6].translation(2)                    # frame 2 @ nt2
         y = s.translation(1)[1:2]                    # == frame 1, aa 1
         assert str(x) == str(y)
+        assert y.frame == 1
 
         x = s[2:7].translation(3)                    # frame 3 @ nt2
         y = s.translation(2)[1:2]                    # == frame 2, aa 1
         assert str(x) == str(y)
+        assert y.frame == 2
 
     def test_annot_identity(self):
         return
