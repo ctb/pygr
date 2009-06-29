@@ -511,28 +511,40 @@ class SeqPath(object):
         except AttributeError:
             # not there -- create!
             frames, translationDB = self._build_translations_cache()
-            
+
+        orig_frame = frame
+        path = self.pathForward
+
+        # translate negative frames into positive frames with RCed sequence.
+        if frame < 0:
+            path = -path
+            frame = -(frame + 1)
+            if frame == 0:
+                frame = 3
+
         # adjust frame to get the right frame wrt the parent translation
         parent_frame = frame + self.start % 3
         if parent_frame > 3:
             parent_frame -= 3
 
-        path = self.pathForward
-        if frame < 0:
-            path = -path
-            frame = -frame
-
         a = frames.get(frame)
-        if a is None:
+        if a is None or 1: # @CTB
             # generate translation of the parent sequence
-            parent_start = parent_frame - 1
-            parent_length = 3 * int((path.stop - (parent_frame - 1)) / 3)
-            a = translationDB.new_annotation(str(len(translationDB)),
-                                             (path.id, parent_start,
-                                              parent_start + parent_length))
-            frames[parent_frame] = a
+            if orig_frame < 0:
+                parent_start = path.start + (parent_frame - 1)
+            else:
+                parent_start = parent_frame - 1
+            
+            parent_length = 3 * ((path.stop - path.start - parent_start) // 3)
+            parent_stop = parent_start + parent_length
 
-            assert a.frame == parent_frame, (a.frame, parent_frame)
+            a = translationDB.new_annotation(str(len(translationDB)),
+                                             (path.id,
+                                              parent_start,
+                                              parent_stop))
+
+            frames[parent_frame] = a
+#            assert a.frame == parent_frame, (a.frame, parent_frame) # @CTB
 
         # we want to return a slice into a translation of the whole thing.
         start = int((self.start + frame - 1) / 3)

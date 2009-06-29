@@ -98,6 +98,7 @@ class SequenceTranslation_Test(unittest.TestCase):
         self.seq7 = self.db['seq7']
         self.seq8 = self.db['seq8']
         self.seq9 = self.db['seq9']
+        self.flim = self.db['flim']
 
     def test_6_path(self):
         assert len(self.seq6.translation(1)) == 2
@@ -182,6 +183,22 @@ class SequenceTranslation_Test(unittest.TestCase):
         y = s.translation(2)[1:2]                    # == frame 2, aa 1
         assert str(x) == str(y)
         assert y.frame == 2
+
+    def test_negative_frame(self):
+        s = self.flim
+        
+        assert str(s.translation(-2)) == 'HN*K', s.translation(-2)
+        assert str(s.translation(-3)) == 'IIR', s.translation(-3)
+        assert str(s.translation(-1)) == '*LE', s.translation(-1)
+
+        x = s[3:]
+        assert str(x.translation(-2)) == 'N*K', x.translation(-2)
+        
+        x = s[5:]
+        assert str(x.translation(-2)) == 'LE', x.translation(-2)
+        
+        x = s[4:]
+        assert str(x.translation(-2)) == 'IR', x.translation(-2)
 
     def test_annot_identity(self):
         return
