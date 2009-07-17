@@ -477,6 +477,24 @@ class SeqPath(object):
                 path._seqtype=guess_seqtype(str(self[0:40]))
                 return path._seqtype
 
+    def translation(self, frame=+1):
+        import translationDB
+        
+        if abs(frame) < 1 or abs(frame) > 3:
+            raise ValueError('no such frame %s!' % (frame,))
+        
+        if self.seqtype() == PROTEIN_SEQTYPE:
+            raise ValueError('protein sequence has no translation!')
+
+        tdb = translationDB.get_translation_db(self.db)
+
+        if frame > 0:
+            name = "%s:%d" % (self.id, frame - 1)
+        else:  # frame < 0:
+            name = "%s:-%d" % (self.id, frame + 1)
+
+        return tdb.annodb[name]
+        
     def __str__(self):
         'string for this sequence interval; use reverse complement if necessary...'
         if self.orientation>0:

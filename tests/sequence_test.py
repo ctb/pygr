@@ -1,6 +1,6 @@
 import unittest
 from testlib import testutil, PygrTestProgram
-from pygr import sequence
+from pygr import sequence, seqdb
 
 class Sequence_Test(unittest.TestCase):
     'basic sequence class tests'
@@ -89,6 +89,101 @@ class Sequence_Test(unittest.TestCase):
         assert sequence.Sequence('kqwestvvarphal', 'foo').seqtype() == \
                          sequence.PROTEIN_SEQTYPE
 
+class SequenceTranslation_Test(unittest.TestCase):
+    '''Tests for the translation() function.'''
+    
+    def setUp(self):
+        self.db = seqdb.SequenceFileDB(testutil.datafile('translation.fa'))
+        self.seq6 = self.db['seq6']
+        self.seq7 = self.db['seq7']
+        self.seq8 = self.db['seq8']
+        self.seq9 = self.db['seq9']
+        self.flim = self.db['flim']
+
+    def test_6_path(self):
+        assert len(self.seq6.translation(1)) == 2
+        assert len(self.seq6.translation(2)) == 1
+        assert len(self.seq6.translation(3)) == 1
+        
+    def test_7_path(self):
+        assert len(self.seq7.translation(1)) == 2
+        assert len(self.seq7.translation(2)) == 2
+        assert len(self.seq7.translation(3)) == 1
+        
+    def test_8_path(self):
+        assert len(self.seq8.translation(1)) == 2
+        assert len(self.seq8.translation(2)) == 2
+        assert len(self.seq8.translation(3)) == 2
+
+    def test_slice_frame_adjust(self):
+        s = self.seq8
+        assert str(s[1:].translation(1)) == str(s[0:].translation(2))
+        assert str(s[2:].translation(1)) == str(s[0:].translation(3))
+        assert str(s[3:].translation(1)) == str(s[0:].translation(1))
+
+    def test_slice_frame_adjust(self):
+        s = self.seq9
+
+        ### slices of first-frame translation are correct:
+        
+        assert str(s[0:3].translation(1)) == 'M', s[0:3].translation(1)
+        assert str(s[3:6].translation(1)) == '*', s[3:6].translation(1)
+        assert str(s[6:9].translation(1)) == 'L', s[6:9].translation(1)
+
+        ### starting with nt 0
+        
+        x = s[0:3].translation(1)                    # frame 1 @ nt 0
+        y = s.translation(1)[:1]                     # == frame 1, aa 0
+        assert str(x) == str(y), (str(x), str(y))
+        assert x.frame == 1
+        assert y.frame == 1
+
+        x = s[0:4].translation(2)                    # frame 2 @ nt 0
+        y = s.translation(2)[:1]                     # == frame 2, aa 0
+        assert str(x) == str(y), (str(x), str(y))
+        assert x.frame == 2
+        assert y.frame == 2
+
+        x = s[0:5].translation(3)                    # frame 3 @ nt 0
+        y = s.translation(3)[:1]                     # == frame 3, aa 0
+        assert str(x) == str(y), (str(x), str(y))
+        assert x.frame == 3
+        assert y.frame == 3
+
+        ## starting with nt 1
+
+        x = s[1:4].translation(1)                    # frame 1 @ nt 1
+        y = s.translation(2)[:1]                     # == frame 2, aa 0
+        assert str(x) == str(y)
+        assert y.frame == 2
+
+        x = s[1:5].translation(2)                    # frame 2 @ nt 1
+        y = s.translation(3)[:1]                     # == frame 3, aa 0
+        assert str(x) == str(y), (str(x), str(y))
+        assert y.frame == 3
+
+        x = s[1:6].translation(3)                    # frame 3 @ pos 1
+        y = s.translation(1)[1:2]                    # == frame 1, aa 1
+        assert str(x) == str(y), (str(x), str(y))
+        assert y.frame == 1
+
+        ## starting with nt 2
+
+        x = s[2:5].translation(1)                    # frame 1 @ nt2
+        y = s.translation(3)[0]                      # == frame 3, aa 0
+        assert str(x) == str(y), (str(x), str(y))
+        assert y.frame == 3
+
+        x = s[2:6].translation(2)                    # frame 2 @ nt2
+        y = s.translation(1)[1:2]                    # == frame 1, aa 1
+        assert str(x) == str(y)
+        assert y.frame == 1
+
+        x = s[2:7].translation(3)                    # frame 3 @ nt2
+        y = s.translation(2)[1:2]                    # == frame 2, aa 1
+        assert str(x) == str(y)
+        assert y.frame == 2
+        
 # @CTB
 '''
 #from pygrdata_test import PygrSwissprotBase
