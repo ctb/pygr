@@ -325,7 +325,7 @@ class SequenceDB(object, UserDict.DictMixin):
     
     def __repr__(self):
         return "<%s '%s'>" % (self.__class__.__name__,
-                              self.itemClass.__class__.__name__)
+                              self.itemClass.__name__)
     
     def clear_cache(self):
         """Empty the cache."""
