@@ -1,20 +1,20 @@
 import os, unittest
 from testlib import testutil, PygrTestProgram, SkipTest
 from pygr.sqlgraph import SQLTable, SQLTableNoCache,\
-     MapView, GraphView, DBServerInfo, import_sqlite
+     MapView, GraphView, GenericServerInfo, import_sqlite
 from pygr import logger
 
 class SQLTable_Setup(unittest.TestCase):
     tableClass = SQLTable
     def __init__(self, *args, **kwargs):
         unittest.TestCase.__init__(self, *args, **kwargs)
-        self.serverInfo = DBServerInfo() # share conn for all tests
+        self.serverInfo = GenericServerInfo("sqlite:////tmp/test.sqlite.db") # share conn for all tests
     def setUp(self):
         try:
             self.load_data(writeable=self.writeable)
         except ImportError:
             raise SkipTest('missing MySQLdb module?')
-    def load_data(self, tableName='test.sqltable_test', writeable=False):
+    def load_data(self, tableName='sqltable_test', writeable=False):
         'create 3 tables and load 9 rows for our tests'
         self.tableName = tableName
         self.joinTable1 = joinTable1 = tableName + '1'
@@ -261,8 +261,7 @@ class Ensembl_Test(unittest.TestCase):
         # test will be skipped if mysql module or ensembldb server unavailable
 
         logger.debug('accessing ensembldb.ensembl.org')
-        conn = DBServerInfo(host='ensembldb.ensembl.org', user='anonymous',
-                            passwd='')
+        conn = GenericServerInfo('mysql://anonymous@ensembldb.ensembl.org')
         try:
             translationDB = SQLTable('homo_sapiens_core_47_36i.translation',
                                      serverInfo=conn)

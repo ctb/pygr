@@ -430,10 +430,18 @@ def get_table_schema(self, analyzeSchema=True):
         for this module''' % modname)
     schema_func(self, analyzeSchema) # run the schema function
 
+def generic_table_schema(self, analyzeSchema=True):
+    'retrieve table schema from a SQLAlchemy-supported database, save on self'
+    self._format_query = SQLFormatDict(sqlite.paramstyle, _sqliteMacros)
+    if not analyzeSchema:
+        return
+    self.clear_schema() # reset settings and dictionaries
+    self.serverInfo.get_table_schema(self,self.name)
 
 _schemaModuleDict = {'MySQLdb.cursors':mysql_table_schema,
                      'pysqlite2.dbapi2':sqlite_table_schema,
-                     'sqlite3':sqlite_table_schema}
+                     'sqlite3':sqlite_table_schema,
+                     'sqlalchemy':generic_table_schema}
 
 class SQLTableBase(object, UserDict.DictMixin):
     "Store information about an SQL table as dict keyed by primary key"
@@ -1711,7 +1719,10 @@ def sqlite_connect(*args, **kwargs):
     return connection, cursor
 
 # list of database connection functions DBServerInfo knows how to use
-_DBServerModuleDict = dict(MySQLdb=mysql_connect, sqlite=sqlite_connect)
+_DBServerModuleDict = dict(MySQLdb=mysql_connect, 
+                           sqlite=sqlite_connect,
+                           sqlalchemy=None)
+                      
 
 
 class DBServerInfo(object):
@@ -1757,6 +1768,135 @@ class DBServerInfo(object):
         """return all picklable arguments"""
         return dict(args=self.args, kwargs=self.kwargs,
                     moduleName=self.moduleName)
+
+class GenericServerInfo(DBServerInfo):
+    """picklable reference to an sqlalchemy-supported database."""
+    def __init__(self, *args, **kwargs):
+        """Takes generic dburi argument, eg, 
+            sqlite:////path/to/sqlite.db
+            mysql://user:password@host:port/database
+            postgresql://user:password@host:port/database
+        """
+        DBServerInfo.__init__(self, 'sqlalchemy', *args, **kwargs)
+
+    def _start_connection(self):
+        """Start a new connection."""
+        # SQLAlchemy objects imported here to avoid sqlalchemy import errors
+        # for users who want to use only DBServerInfo/SQLiteServerInfo
+        from sqlalchemy import create_engine as SA_create_engine
+        
+        try:
+            self.dbengine
+        except AttributeError:
+            self.get_engine()
+        try:
+            self._connection
+        except AttributeError:
+            self._connection = self.dbengine.pool.create_connection().get_connection()
+            self._cursor = self._connection.cursor()
+        
+    def get_engine(self):
+        """Returns the engine for this database server."""
+        # SQLAlchemy objects imported here to avoid sqlalchemy import errors
+        # for users who want to use only DBServerInfo/SQLiteServerInfo
+        from sqlalchemy import create_engine as SA_create_engine
+
+        try:
+            return self.dbengine
+        except AttributeError:
+            self.dbengine = SA_create_engine(*self.args, **self.kwargs)
+            return self.dbengine
+
+    #def close(self):
+    #    """Close this cursor and connection. """
+    #    try:
+    #        self._cursor.close()
+    #        self._connection.close()
+    #        del self._cursor
+    #        del self._connection
+    #    except AttributeError:
+    #        pass
+    
+    def get_tableobj(self,tablename):
+        """Returns the SQLAlchemy table object."""
+        # SQLAlchemy objects imported here to avoid sqlalchemy import errors
+        # for users who want to use only DBServerInfo/SQLiteServerInfo
+        from sqlalchemy import MetaData as SA_MetaData
+
+        metadata = SA_MetaData(*self.args,**self.kwargs) #
+        metadata.reflect()
+        try:    
+            tableobj = metadata.tables[tablename]
+        except KeyError:
+            raise(Exception("Error: The database does not contain any tables."))
+        return tableobj
+
+    def get_create_table_schema(self,tablename):
+        """Returns the CREATE TABLE statement.
+        """
+        table_obj = self.get_tableobj(tablename)
+        engine = table_obj.metadata.bind.engine
+        dialect = table_obj.metadata.bind.dialect
+        s = dialect._show_create_table(engine,table_obj)
+        return str(s)
+
+    def get_table_schema(self, owner_obj, tablename):
+        """Obtain all of the following information required by SQLTableBase.
+            owner_obj - a SQLTableBase-derivative instance.
+        """
+        tableobj = self.get_tableobj(tablename)
+        table_columns = tableobj.columns
+        
+        owner_obj.columnName = [col.name for col in table_columns]
+        
+        owner_obj.columnType = {}
+        for col in table_columns:
+            owner_obj.columnType[col.name]=col.type.get_col_spec() # eg, 'VARCHAR(50)'
+        
+        owner_obj.description = dict(owner_obj.columnType) # USES ONLY column
+                                                           # names as keys()
+        owner_obj.usesIntID = bool(int == self.get_primary_key_type(tableobj))
+        owner_obj.primary_key = self.get_primary_key(tableobj)
+        owner_obj.indexed = {} #NOT SURE 
+        
+    def get_primary_key(self,tableobj):
+        """Returns the primary_key.
+        """
+        primary_keys = table_obj.primary_key.keys()
+        try:
+            primary_key = table.primary_key.keys()[0]
+        except IndexError:
+            raise(Exception("Error: The specified table has no primary key!"))
+        return primary_key
+
+    def get_primary_key_type(self,tableobj):
+        """Returns the type of the primary key."""
+        column_objs = self.get_columns(tableobj)
+        matched = filter(lambda col: col.name==primary_key, column_objs)
+            
+        try:
+            col = matched[0]
+            if "MSString" in str(col.type):
+                return str
+            elif "MSInteger" in str(col.type):
+                return int
+            else:
+                raise IndexError # Well... 
+        except IndexError:
+            raise(Exception("Error: Unable to determine primary key type."))
+        
+    def get_column_names(self,tableobj):
+        """Returns a list of column names.
+        """
+        return [str(col.name) for col in self.get_columns(tableobj)]
+    
+    def get_columns(self,tableobj):
+        """Returns a list of SQLAlchemy column objects."""        
+        return [c for c  in tableobj]
+    
+    #def get_indexed_column_names(self,tableobj):
+    #    """Returns a list of indexed column names."""
+    #    pass
 
 
 class SQLiteServerInfo(DBServerInfo):
