@@ -246,16 +246,17 @@ def mysql_enabled():
         msg = 'MySQLdb error: %s' % exc
         warn(msg)
         return False
-    try:
-        from pygr import sqlgraph
-        tempcurs = sqlgraph.getNameCursor()[1]
-        # disable some MySQL specific spurious warnings, current scope only
-        warnings.simplefilter("ignore") 
-        tempcurs.execute('create database if not exists test')
-    except Exception, exc:
-        msg = 'cannot operate on MySql database: %s' % exc
-        warn(msg)
-        return False
+
+    #try:
+    #    from pygr import sqlgraph
+    #    tempcurs = sqlgraph.getNameCursor()[1]
+    #    # disable some MySQL specific spurious warnings, current scope only
+    #    warnings.simplefilter("ignore") 
+    #    tempcurs.execute('create database if not exists test')
+    #except Exception, exc:
+    #    msg = 'cannot operate on MySql database: %s' % exc
+    #    warn(msg)
+    #    return False
 
     return True
 
