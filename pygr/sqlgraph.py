@@ -419,24 +419,32 @@ class SQLFormatDict(object):
 def get_table_schema(self, analyzeSchema=True):
     'run the right schema function based on type of db server connection'
     try:
-        modname = self.cursor.__class__.__module__
+        schema_func = self.serverInfo.get_table_schema
     except AttributeError:
-        raise ValueError('no cursor object or module information!')
+        raise(Exception("Error: serverInfo doesn't support get_table_schema"))
     try:
-        schema_func = self._schemaModuleDict[modname]
-    except KeyError:
-        raise KeyError('''unknown db module: %s. Use _schemaModuleDict
-        attribute to supply a method for obtaining table schema
-        for this module''' % modname)
-    schema_func(self, analyzeSchema) # run the schema function
+        schema_func(self, analyzeSchema=analyzeSchema)
+    except TypeError:
+        try:
+            modname = self.cursor.__class__.__module__
+        except AttributeError:
+            raise ValueError('no cursor object or module information!')
+        try:
+            schema_func = self._schemaModuleDict[modname]
+        except KeyError:
+            raise KeyError('''unknown db module: %s. Use _schemaModuleDict
+            attribute to supply a method for obtaining table schema
+            for this module''' % modname)
+        schema_func(self, analyzeSchema) # run the schema function
 
 def generic_table_schema(self, analyzeSchema=True):
     'retrieve table schema from a SQLAlchemy-supported database, save on self'
-    self._format_query = SQLFormatDict(sqlite.paramstyle, _sqliteMacros)
-    if not analyzeSchema:
-        return
     self.clear_schema() # reset settings and dictionaries
-    self.serverInfo.get_table_schema(self,self.name)
+    self.serverInfo.get_table_schema(self, analyzeSchema=analyzeSchema, tablename=self.name)
+
+# For user with GenericServerInfo
+_formatMacrosDict = {'mysql':_mysqlMacros,
+                     'sqlite':_sqliteMacros}
 
 _schemaModuleDict = {'MySQLdb.cursors':mysql_table_schema,
                      'pysqlite2.dbapi2':sqlite_table_schema,
@@ -459,29 +467,26 @@ class SQLTableBase(object, UserDict.DictMixin):
         self.autoGC = autoGC
         self.orderBy = orderBy
         self.writeable = writeable
-        if cursor is None:
-            if serverInfo is not None: # get cursor from serverInfo
-                cursor = serverInfo.cursor()
-            else: # try to read connection info from name or config file
-                name,cursor = getNameCursor(name,**kwargs)
-        else:
+        self.serverInfo = serverInfo
+        self.name = name
+        if cursor is not None:
             warnings.warn("""The cursor argument is deprecated.  Use serverInfo instead! """,
                           DeprecationWarning, stacklevel=2)
-        self.cursor = cursor
+        self.cursor = self.serverInfo.cursor()
         if createTable is not None: # RUN COMMAND TO CREATE THIS TABLE
             if dropIfExists: # get rid of any existing table
-                cursor.execute('drop table if exists ' + name)
-            self.get_table_schema(False) # check dbtype, init _format_query
+                self.cursor.execute('drop table if exists ' + name)
+            self.get_table_schema(analyzeSchema=False) # check dbtype, init _format_query
             sql,params = self._format_query(createTable, ()) # apply macros
-            cursor.execute(sql) # create the table
-        self.name = name
+            self.cursor.execute(sql%params) # create the table
+        
         if graph is not None:
             self.graph = graph
         if maxCache is not None:
             self.maxCache = maxCache
         if arraysize is not None:
             self.arraysize = arraysize
-            cursor.arraysize = arraysize
+            self.cursor.arraysize = arraysize
         self.get_table_schema() # get schema of columns to serve as attrs
         self.data = {} # map of all attributes, including aliases
         for icol,field in enumerate(self.columnName):
@@ -501,8 +506,6 @@ class SQLTableBase(object, UserDict.DictMixin):
             self.data.update(attrAlias)
         if clusterKey is not None:
             self.clusterKey=clusterKey
-        if serverInfo is not None:
-            self.serverInfo = serverInfo
 
     def __hash__(self):
         return id(self)
@@ -1779,74 +1782,95 @@ class GenericServerInfo(DBServerInfo):
         """
         DBServerInfo.__init__(self, 'sqlalchemy', *args, **kwargs)
 
-    def _start_connection(self):
-        """Start a new connection."""
+    def _get_engine(self):
+        """Returns the engine for this database server."""
         # SQLAlchemy objects imported here to avoid sqlalchemy import errors
         # for users who want to use only DBServerInfo/SQLiteServerInfo
-        from sqlalchemy import create_engine as SA_create_engine
+        from sqlalchemy import MetaData
+
+        try:
+            self.metadata
+        except AttributeError:
+            self.metadata = MetaData(*self.args,**self.kwargs)
         
+        self.metadata.reflect()
+
+        from sqlalchemy import create_engine        
         try:
             self.dbengine
         except AttributeError:
-            self.get_engine()
+            self.dbengine = self.metadata.bind.engine
+        return self.dbengine
+
+    def _start_connection(self):
+        """Start a new connection."""
+        try:
+            self.dbengine
+        except AttributeError:
+            self._get_engine()
         try:
             self._connection
         except AttributeError:
             self._connection = self.dbengine.pool.create_connection().get_connection()
-            self._cursor = self._connection.cursor()
-        
-    def get_engine(self):
-        """Returns the engine for this database server."""
-        # SQLAlchemy objects imported here to avoid sqlalchemy import errors
-        # for users who want to use only DBServerInfo/SQLiteServerInfo
-        from sqlalchemy import create_engine as SA_create_engine
-
         try:
-            return self.dbengine
+            self._cursor
         except AttributeError:
-            self.dbengine = SA_create_engine(*self.args, **self.kwargs)
-            return self.dbengine
-
-    #def close(self):
-    #    """Close this cursor and connection. """
-    #    try:
-    #        self._cursor.close()
-    #        self._connection.close()
-    #        del self._cursor
-    #        del self._connection
-    #    except AttributeError:
-    #        pass
-    
+            self._cursor = self._connection.cursor()
+            
     def get_tableobj(self,tablename):
-        """Returns the SQLAlchemy table object."""
-        # SQLAlchemy objects imported here to avoid sqlalchemy import errors
-        # for users who want to use only DBServerInfo/SQLiteServerInfo
-        from sqlalchemy import MetaData as SA_MetaData
-
-        metadata = SA_MetaData(*self.args,**self.kwargs) #
-        metadata.reflect()
+        """Returns the SQLAlchemy table object."""        
+        try:
+            self.metadata
+        except AttributeError:
+            self._start_connection()
+        self.metadata.reflect()
+        self.metadata.bind.engine
         try:    
-            tableobj = metadata.tables[tablename]
+            tableobj = self.metadata.tables[tablename]
         except KeyError:
-            raise(Exception("Error: The database does not contain any tables."))
+            raise(Exception("Error: The database does not contain requested table '%s'.\
+                            There '%s' available tables."%(tablename, len(self.metadata.tables))))
         return tableobj
 
     def get_create_table_schema(self,tablename):
         """Returns the CREATE TABLE statement.
         """
+        try:
+            self.dbengine
+        except AttributeError:
+            self._start_connection()
         table_obj = self.get_tableobj(tablename)
         engine = table_obj.metadata.bind.engine
         dialect = table_obj.metadata.bind.dialect
         s = dialect._show_create_table(engine,table_obj)
         return str(s)
 
-    def get_table_schema(self, owner_obj, tablename):
+    def get_table_schema(self, owner_obj, analyzeSchema=True, tablename=None):
         """Obtain all of the following information required by SQLTableBase.
             owner_obj - a SQLTableBase-derivative instance.
         """
+        self._start_connection()
+                
+        # setup format macros
+        try:
+            owner_obj._format_query
+        except AttributeError:
+            dbtype = self.get_engine_type() # mysql, sqlite
+            try:
+                macros = _formatMacrosDict[dbtype]
+            except KeyError:
+                raise(Exception("Error: Unsupported database back-end"))
+            owner_obj._format_query = SQLFormatDict(self.get_param_style(),
+                                                macros)
+
+        if not analyzeSchema: return
+        
+        # analyze schema information
+        if tablename == None:
+            tablename = owner_obj.name
         tableobj = self.get_tableobj(tablename)
         table_columns = tableobj.columns
-        
+
         owner_obj.columnName = [col.name for col in table_columns]
         
         owner_obj.columnType = {}
@@ -1857,47 +1881,62 @@ class GenericServerInfo(DBServerInfo):
                                                            # names as keys()
         owner_obj.usesIntID = bool(int == self.get_primary_key_type(tableobj))
         owner_obj.primary_key = self.get_primary_key(tableobj)
-        owner_obj.indexed = {} #NOT SURE 
-        
-    def get_primary_key(self,tableobj):
+        owner_obj.indexed = {} #NOT SURE
+        for idx in tableobj.indexes:
+            owner_obj.indexed[idx.name] = [c.name for c in idx.columns]
+
+    def get_param_style(self):
+        """Retruns the parastyle for this database engine."""
+        self._start_connection()
+        return self.dbengine.dialect.paramstyle
+
+    def get_engine_type(self):
+        """Returns the type of the database engine, eg, mysql."""
+        self._start_connection()
+        return self.dbengine.dialect.name
+
+    def get_primary_key(self,tableobj=None,tablename=None):
         """Returns the primary_key.
         """
-        primary_keys = table_obj.primary_key.keys()
+        if tablename is not None:
+            tableobj = self.get_tableobj(tablename)
+        primary_keys = tableobj.primary_key.keys()
         try:
-            primary_key = table.primary_key.keys()[0]
+            primary_key = primary_keys[0]
         except IndexError:
             raise(Exception("Error: The specified table has no primary key!"))
         return primary_key
 
-    def get_primary_key_type(self,tableobj):
+    def get_primary_key_type(self,tableobj=None,tablename=None):
         """Returns the type of the primary key."""
+        if tablename is not None:
+            tableobj = self.get_tableobj(tablename)
         column_objs = self.get_columns(tableobj)
-        matched = filter(lambda col: col.name==primary_key, column_objs)
-            
+        primary_key = self.get_primary_key(tableobj)
+        matched = filter(lambda col: str(col.name)==str(primary_key), column_objs)
+        
         try:
             col = matched[0]
-            if "MSString" in str(col.type):
+            if "String" in str(col.type):
                 return str
-            elif "MSInteger" in str(col.type):
+            elif "Integer" in str(col.type):
                 return int
             else:
-                raise IndexError # Well... 
+                raise Exception("Error: Cannot match primary key type to str or int: %s" % str(col.type)) # Well... 
         except IndexError:
-            raise(Exception("Error: Unable to determine primary key type."))
+            raise(Exception("Error: Unable to determine primary key type: %s"%(matched)))
         
-    def get_column_names(self,tableobj):
+    def get_column_names(self,tableobj=None,tablename=None):
         """Returns a list of column names.
         """
-        return [str(col.name) for col in self.get_columns(tableobj)]
+        if tablename is not None:
+            tableobj = self.get_tableobj(tablename)
+        return [str(col.name) for col in tableobj.columns]
     
     def get_columns(self,tableobj):
         """Returns a list of SQLAlchemy column objects."""        
-        return [c for c  in tableobj]
+        return [c for c in tableobj.columns]
     
-    #def get_indexed_column_names(self,tableobj):
-    #    """Returns a list of indexed column names."""
-    #    pass
-
 
 class SQLiteServerInfo(DBServerInfo):
     """picklable reference to a sqlite database"""
@@ -1910,6 +1949,9 @@ class SQLiteServerInfo(DBServerInfo):
         if self.args[0] == ':memory:':
             raise ValueError('SQLite in-memory database is not picklable!')
         return DBServerInfo.__getstate__(self)
+    
+    def get_table_schema(self, db, analyzeSchema):
+        return sqlite_table_schema(db, analyzeSchema)
         
             
 class MapView(object, UserDict.DictMixin):
