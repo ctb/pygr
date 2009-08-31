@@ -283,6 +283,10 @@ _mysqlMacros = dict(IGNORE='ignore', REPLACE='replace',
                     AUTO_INCREMENT='AUTO_INCREMENT', SUBSTRING='substring',
                     SUBSTR_FROM='FROM', SUBSTR_FOR='FOR')
 
+_postgresMacros = dict(IGNORE='ignore', REPLACE='replace',
+                    AUTO_INCREMENT='', SUBSTRING='substring',
+                    SUBSTR_FROM='FROM', SUBSTR_FOR='FOR')
+
 _sqliteMacros = dict(IGNORE='or ignore', REPLACE='insert or replace',
                      AUTO_INCREMENT='', SUBSTRING='substr',
                     SUBSTR_FROM=',', SUBSTR_FOR=',')
@@ -291,6 +295,7 @@ _sqliteMacros = dict(IGNORE='or ignore', REPLACE='insert or replace',
 
 # For user with GenericServerInfo
 _formatMacrosDict = {'mysql':_mysqlMacros,
+                     #'postgres':_postgresMacros, # FAILED TESTS
                      'sqlite':_sqliteMacros}
 
 
@@ -316,7 +321,13 @@ class SQLTableBase(object, UserDict.DictMixin):
         self.cursor = self.serverInfo.cursor()
         if createTable is not None: # RUN COMMAND TO CREATE THIS TABLE
             if dropIfExists: # get rid of any existing table
-                self.cursor.execute('drop table if exists ' + name)
+                try: # Use SQLAlchemy
+                    table = self.serverInfo.get_tableobj(name)
+                except:
+                    table = None
+                if table:
+                    table.drop()
+                #self.cursor.execute('drop table if exists ' + name)
             self.serverInfo.get_table_schema(self,analyzeSchema=False) # check dbtype, init _format_query
             sql,params = self._format_query(createTable, ()) # apply macros
             self.cursor.execute(sql) # create the table
@@ -1612,7 +1623,7 @@ class GenericServerInfo(DBServerInfo):
         """Takes generic dburi argument, eg, 
             sqlite:////path/to/sqlite.db
             mysql://user:password@host:port/database
-            postgresql://user:password@host:port/database
+            postgres://user:password@host:port/database
         """
         DBServerInfo.__init__(self, 'sqlalchemy', *args, **kwargs)
 
