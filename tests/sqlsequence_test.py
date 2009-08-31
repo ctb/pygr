@@ -11,9 +11,12 @@ class SQLSequence_Test(unittest.TestCase):
     SQLSequence objects created by a SQLTable object rather than
     instantiating the SQLSequence objects directly.
     '''
-    def setUp(self, serverInfo=None, dbname='test.sqlsequence_test'):
+    def setUp(self, serverInfo=None, dbname='sqlsequence_test'):
         if not testutil.mysql_enabled():
             raise SkipTest, "no MySQL installed"
+
+        if not serverInfo:
+            serverInfo = sqlgraph.GenericServerInfo("sqlite:////tmp/pygr.tests.sqlsequence.sqlitedb")
         
         createTable = """\
         CREATE TABLE %s
