@@ -4,6 +4,8 @@ from pygr.sqlgraph import SQLTable, SQLTableNoCache,\
      MapView, GraphView, GenericServerInfo, import_sqlite
 from pygr import logger
 
+import pygr
+
 class SQLTable_Setup(unittest.TestCase):
     tableClass = SQLTable
     def __init__(self, *args, **kwargs):
@@ -261,11 +263,11 @@ class Ensembl_Test(unittest.TestCase):
         # test will be skipped if mysql module or ensembldb server unavailable
 
         logger.debug('accessing ensembldb.ensembl.org')
-        conn = GenericServerInfo('mysql://anonymous@ensembldb.ensembl.org')
+        conn = GenericServerInfo('mysql://anonymous@ensembldb.ensembl.org/homo_sapiens_core_47_36i')
         try:
-            translationDB = SQLTable('homo_sapiens_core_47_36i.translation',
+            translationDB = SQLTable('translation',
                                      serverInfo=conn)
-            exonDB = SQLTable('homo_sapiens_core_47_36i.exon', serverInfo=conn)
+            exonDB = SQLTable('exon', serverInfo=conn)
         except ImportError,e:
             raise SkipTest(e)
         
