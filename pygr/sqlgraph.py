@@ -439,7 +439,6 @@ def get_table_schema(self, analyzeSchema=True):
 
 def generic_table_schema(self, analyzeSchema=True):
     'retrieve table schema from a SQLAlchemy-supported database, save on self'
-    self.clear_schema() # reset settings and dictionaries
     self.serverInfo.get_table_schema(self, analyzeSchema=analyzeSchema, tablename=self.name)
 
 # For user with GenericServerInfo
