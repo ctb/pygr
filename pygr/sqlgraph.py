@@ -477,7 +477,7 @@ class SQLTableBase(object, UserDict.DictMixin):
                 self.cursor.execute('drop table if exists ' + name)
             self.get_table_schema(analyzeSchema=False) # check dbtype, init _format_query
             sql,params = self._format_query(createTable, ()) # apply macros
-            self.cursor.execute(sql%params) # create the table
+            self.cursor.execute(sql) # create the table
         
         if graph is not None:
             self.graph = graph
