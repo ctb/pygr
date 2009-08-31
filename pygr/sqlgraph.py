@@ -231,144 +231,6 @@ def list_to_dict(names, values):
     return d
 
 
-def getNameCursor(name=None, connect=None, configFile=None, **kwargs):
-    '''get table name and cursor by parsing name or using configFile.
-    If neither provided, will try to get via your MySQL config file.
-    If connect is None, will use MySQLdb.connect()'''
-    if name is not None:
-        argList = name.split() # TREAT AS WS-SEPARATED LIST
-        if len(argList)>1:
-            name = argList[0] # USE 1ST ARG AS TABLE NAME
-            argnames = ('host','user','passwd') # READ ARGS IN THIS ORDER
-            kwargs = list_to_dict(argnames, argList[1:])
-    conn,cursor = mysql_connect(connect, configFile, **kwargs)
-    return name,cursor
-
-def mysql_connect(connect=None, configFile=None, **args):
-    """return connection and cursor objects, using .my.cnf if necessary"""
-    kwargs = args.copy() # a copy we can modify
-    if 'user' not in kwargs and configFile is None: #Find where config file is
-        osname = platform.system()
-        if osname in('Microsoft', 'Windows'): # Machine is a Windows box
-            paths = []
-            try: # handle case where WINDIR not defined by Windows...
-                windir = os.environ['WINDIR']
-                paths += [(windir, 'my.ini'), (windir, 'my.cnf')]
-            except KeyError:
-                pass
-            try:
-                sysdrv = os.environ['SYSTEMDRIVE']
-                paths += [(sysdrv, os.path.sep + 'my.ini'),
-                          (sysdrv, os.path.sep + 'my.cnf')]
-            except KeyError:
-                pass
-            if len(paths) > 0:
-                configFile = get_valid_path(*paths)
-        else: # treat as normal platform with home directories
-            configFile = os.path.join(os.path.expanduser('~'), '.my.cnf')
-
-    # allows for a local mysql local configuration file to be read 
-    # from the current directory
-    configFile = configFile or os.path.join( os.getcwd(), 'mysql.cnf' )
-
-    if configFile and os.path.exists(configFile):
-        kwargs['read_default_file'] = configFile
-        connect = None # force it to use MySQLdb
-    if connect is None:
-        import MySQLdb
-        connect = MySQLdb.connect
-        kwargs['compress'] = True
-    conn = connect(**kwargs)
-    cursor = conn.cursor()
-    return conn,cursor
-
-_mysqlMacros = dict(IGNORE='ignore', REPLACE='replace',
-                    AUTO_INCREMENT='AUTO_INCREMENT', SUBSTRING='substring',
-                    SUBSTR_FROM='FROM', SUBSTR_FOR='FOR')
-
-def mysql_table_schema(self, analyzeSchema=True):
-    'retrieve table schema from a MySQL database, save on self'
-    import MySQLdb
-    self._format_query = SQLFormatDict(MySQLdb.paramstyle, _mysqlMacros)
-    if not analyzeSchema:
-        return
-    self.clear_schema() # reset settings and dictionaries
-    self.cursor.execute('describe %s' % self.name) # get info about columns
-    columns = self.cursor.fetchall()
-    self.cursor.execute('select * from %s limit 1' % self.name) # descriptions
-    for icol,c in enumerate(columns):
-        field = c[0]
-        self.columnName.append(field) # list of columns in same order as table
-        if c[3] == "PRI": # record as primary key
-            if self.primary_key is None:
-                self.primary_key = field
-            else:
-                try:
-                    self.primary_key.append(field)
-                except AttributeError:
-                    self.primary_key = [self.primary_key,field]
-            if c[1][:3].lower() == 'int':
-                self.usesIntID = True
-            else:
-                self.usesIntID = False
-        elif c[3] == "MUL":
-            self.indexed[field] = icol
-        self.description[field] = self.cursor.description[icol]
-        self.columnType[field] = c[1] # SQL COLUMN TYPE
-
-_sqliteMacros = dict(IGNORE='or ignore', REPLACE='insert or replace',
-                     AUTO_INCREMENT='', SUBSTRING='substr',
-                    SUBSTR_FROM=',', SUBSTR_FOR=',')
-
-def import_sqlite():
-    'import sqlite3 (for Python 2.5+) or pysqlite2 for earlier Python versions'
-    try:
-        import sqlite3 as sqlite
-    except ImportError:
-        from pysqlite2 import dbapi2 as sqlite
-    return sqlite
-
-def sqlite_table_schema(self, analyzeSchema=True):
-    'retrieve table schema from a sqlite3 database, save on self'
-    sqlite = import_sqlite()
-    self._format_query = SQLFormatDict(sqlite.paramstyle, _sqliteMacros)
-    if not analyzeSchema:
-        return
-    self.clear_schema() # reset settings and dictionaries
-    self.cursor.execute('PRAGMA table_info("%s")' % self.name)
-    columns = self.cursor.fetchall()
-    self.cursor.execute('select * from %s limit 1' % self.name) # descriptions
-    for icol,c in enumerate(columns):
-        field = c[1]
-        self.columnName.append(field) # list of columns in same order as table
-        self.description[field] = self.cursor.description[icol]
-        self.columnType[field] = c[2] # SQL COLUMN TYPE
-    self.cursor.execute('select name from sqlite_master where tbl_name="%s" and type="index" and sql is null' % self.name) # get primary key / unique indexes
-    for indexname in self.cursor.fetchall(): # search indexes for primary key
-        self.cursor.execute('PRAGMA index_info("%s")' % indexname)
-        l = self.cursor.fetchall() # get list of columns in this index
-        if len(l) == 1: # assume 1st single-column unique index is primary key!
-            self.primary_key = l[0][2]
-            break # done searching for primary key!
-    if self.primary_key is None: # grrr, INTEGER PRIMARY KEY handled differently
-        self.cursor.execute('select sql from sqlite_master where tbl_name="%s" and type="table"' % self.name)
-        sql = self.cursor.fetchall()[0][0]
-        for columnSQL in sql[sql.index('(') + 1 :].split(','):
-            if 'primary key' in columnSQL.lower(): # must be the primary key!
-                col = columnSQL.split()[0] # get column name
-                if col in self.columnType:
-                    self.primary_key = col
-                    break # done searching for primary key!
-                else:
-                    raise ValueError('unknown primary key %s in table %s'
-                                     % (col,self.name))
-    if self.primary_key is not None: # check its type
-        if self.columnType[self.primary_key] == 'int' or \
-               self.columnType[self.primary_key] == 'integer':
-            self.usesIntID = True
-        else:
-            self.usesIntID = False
-
 class SQLFormatDict(object):
     '''Perform SQL keyword replacements for maintaining compatibility across
     a wide range of SQL backends.  Uses Python dict-based string format
@@ -416,44 +278,24 @@ class SQLFormatDict(object):
         else: # just return the original params list
             return s,paramList
 
-def get_table_schema(self, analyzeSchema=True):
-    'run the right schema function based on type of db server connection'
-    try:
-        schema_func = self.serverInfo.get_table_schema
-    except AttributeError:
-        raise(Exception("Error: serverInfo doesn't support get_table_schema"))
-    try:
-        schema_func(self, analyzeSchema=analyzeSchema)
-    except TypeError:
-        try:
-            modname = self.cursor.__class__.__module__
-        except AttributeError:
-            raise ValueError('no cursor object or module information!')
-        try:
-            schema_func = self._schemaModuleDict[modname]
-        except KeyError:
-            raise KeyError('''unknown db module: %s. Use _schemaModuleDict
-            attribute to supply a method for obtaining table schema
-            for this module''' % modname)
-        schema_func(self, analyzeSchema) # run the schema function
+# Macros for dialect aliases
+_mysqlMacros = dict(IGNORE='ignore', REPLACE='replace',
+                    AUTO_INCREMENT='AUTO_INCREMENT', SUBSTRING='substring',
+                    SUBSTR_FROM='FROM', SUBSTR_FOR='FOR')
 
-def generic_table_schema(self, analyzeSchema=True):
-    'retrieve table schema from a SQLAlchemy-supported database, save on self'
-    self.serverInfo.get_table_schema(self, analyzeSchema=analyzeSchema, tablename=self.name)
+_sqliteMacros = dict(IGNORE='or ignore', REPLACE='insert or replace',
+                     AUTO_INCREMENT='', SUBSTRING='substr',
+                    SUBSTR_FROM=',', SUBSTR_FOR=',')
+
+
 
 # For user with GenericServerInfo
 _formatMacrosDict = {'mysql':_mysqlMacros,
                      'sqlite':_sqliteMacros}
 
-_schemaModuleDict = {'MySQLdb.cursors':mysql_table_schema,
-                     'pysqlite2.dbapi2':sqlite_table_schema,
-                     'sqlite3':sqlite_table_schema,
-                     'sqlalchemy':generic_table_schema}
 
 class SQLTableBase(object, UserDict.DictMixin):
     "Store information about an SQL table as dict keyed by primary key"
-    _schemaModuleDict = _schemaModuleDict # default module list
-    get_table_schema = get_table_schema
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
                  clusterKey=None,createTable=None,graph=None,maxCache=None,
                  arraysize=1024, itemSliceClass=None, dropIfExists=False,
@@ -475,7 +317,7 @@ class SQLTableBase(object, UserDict.DictMixin):
         if createTable is not None: # RUN COMMAND TO CREATE THIS TABLE
             if dropIfExists: # get rid of any existing table
                 self.cursor.execute('drop table if exists ' + name)
-            self.get_table_schema(analyzeSchema=False) # check dbtype, init _format_query
+            self.serverInfo.get_table_schema(self,analyzeSchema=False) # check dbtype, init _format_query
             sql,params = self._format_query(createTable, ()) # apply macros
             self.cursor.execute(sql) # create the table
         
@@ -486,7 +328,7 @@ class SQLTableBase(object, UserDict.DictMixin):
         if arraysize is not None:
             self.arraysize = arraysize
             self.cursor.arraysize = arraysize
-        self.get_table_schema() # get schema of columns to serve as attrs
+        self.serverInfo.get_table_schema(self) # get schema of columns to serve as attrs
         self.data = {} # map of all attributes, including aliases
         for icol,field in enumerate(self.columnName):
             self.data[field] = icol # 1st add mappings to columns
@@ -1714,17 +1556,10 @@ class TableGroup(dict):
     def __getattr__(self,k):
         return self[k]
 
-def sqlite_connect(*args, **kwargs):
-    sqlite = import_sqlite()
-    connection = sqlite.connect(*args, **kwargs)
-    cursor = connection.cursor()
-    return connection, cursor
-
 # list of database connection functions DBServerInfo knows how to use
-_DBServerModuleDict = dict(MySQLdb=mysql_connect, 
-                           sqlite=sqlite_connect,
+_DBServerModuleDict = dict(MySQLdb=None,  # make into a list?
+                           sqlite=None,
                            sqlalchemy=None)
-                      
 
 
 class DBServerInfo(object):
@@ -1935,24 +1770,25 @@ class GenericServerInfo(DBServerInfo):
     def get_columns(self,tableobj):
         """Returns a list of SQLAlchemy column objects."""        
         return [c for c in tableobj.columns]
-    
 
-class SQLiteServerInfo(DBServerInfo):
+
+class SQLiteServerInfo(GenericServerInfo):
     """picklable reference to a sqlite database"""
     def __init__(self, database, *args, **kwargs):
         """Takes same arguments as sqlite3.connect()"""
-        DBServerInfo.__init__(self, 'sqlite',
-                              SourceFileName(database), # save abs path!
-                              *args, **kwargs)
+        GenericServerInfo.__init__(self, 
+                              "sqlite:///%s" % SourceFileName(database), # save abs path!
+                             *args, **kwargs)
     def __getstate__(self):
         if self.args[0] == ':memory:':
             raise ValueError('SQLite in-memory database is not picklable!')
-        return DBServerInfo.__getstate__(self)
-    
-    def get_table_schema(self, db, analyzeSchema):
-        return sqlite_table_schema(db, analyzeSchema)
-        
-            
+        return GenericServerInfo.__getstate__(self)
+                                    
+    #def get_table_schema(self, db, analyzeSchema):
+    #    return sqlite_table_schema(db, analyzeSchema)
+                                                        
+
+
 class MapView(object, UserDict.DictMixin):
     'general purpose 1:1 mapping defined by any SQL query'
     def __init__(self, sourceDB, targetDB, viewSQL, cursor=None,
@@ -1972,9 +1808,9 @@ class MapView(object, UserDict.DictMixin):
                     cursor = serverInfo.cursor()
         self.cursor = cursor
         self.serverInfo = serverInfo
-        self.get_sql_format(False) # get sql formatter for this db interface
-    _schemaModuleDict = _schemaModuleDict # default module list
-    get_sql_format = get_table_schema
+        self.serverInfo.get_table_schema(self,False)
+        #self.get_sql_format(False) # get sql formatter for this db interface
+    #get_sql_format = MapView.serverInfo.get_table_schema
     def __getitem__(self, k):
         if not hasattr(k,'db') or k.db != self.sourceDB:
             raise KeyError('object is not in the sourceDB bound to this map!')
