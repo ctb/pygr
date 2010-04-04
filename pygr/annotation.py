@@ -234,7 +234,7 @@ cannot create annotation object %s; sequence database %s may not be correct'''
             raise IndexError('annotation %s has zero or negative length \
                              [%s:%s]!' % (k, start, stop))
         seq_id = self.getSliceAttr(sliceInfo, 'id')
-        seq = self.seqDB[seq_id]
+        seq = self.seqDB[str(seq_id)]
         return self.itemClass(k, self, seq, start, stop)
 
     def sliceAnnotation(self, k, sliceInfo, limitCache=True):
